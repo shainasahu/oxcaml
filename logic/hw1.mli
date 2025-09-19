@@ -4,12 +4,31 @@ type player_kind =
   | P1
   | P2
 
-type suit = Hearts | Diamonds | Clubs | Spades
-type rank =
-  | Two | Three | Four | Five | Six | Seven
-  | Eight | Nine | Ten | Jack | Queen | King | Ace
+type suit =
+  | Hearts
+  | Diamonds
+  | Clubs
+  | Spades
 
-type card = { rank : rank; suit : suit }
+type rank =
+  | Two
+  | Three
+  | Four
+  | Five
+  | Six
+  | Seven
+  | Eight
+  | Nine
+  | Ten
+  | Jack
+  | Queen
+  | King
+  | Ace
+
+type card =
+  { rank : rank
+  ; suit : suit
+  }
 
 type decision =
   | In_progress of { whose_turn : player_kind }
