@@ -18,79 +18,58 @@ These patches didn't apply:
 
 ## Solution
 
-### Option 1: Automatic Fix Script (Recommended)
+### Quick Fix (Recommended)
 
-Use the provided fix script after the opam install fails:
-
-1. Try the normal install (it will fail):
+1. Try the install (it will fail with patch errors):
 ```bash
 opam install js_of_ocaml.6.0.1+ox js_of_ocaml-compiler.6.0.1+ox
 ```
 
-2. Find the build directory where the failure occurred (usually in `~/.opam/{switch}/.opam-switch/build/js_of_ocaml-compiler.6.0.1+ox/`)
-
-3. Run the fix script:
+2. Apply the fix to the failed build directory:
 ```bash
-./fix-js-of-ocaml-patches.sh ~/.opam/5.2.0+ox/.opam-switch/build/js_of_ocaml-compiler.6.0.1+ox
+# Find the build directory (adjust path for your opam switch)
+BUILD_DIR=~/.opam/5.2.0+ox/.opam-switch/build/js_of_ocaml-compiler.6.0.1+ox
+
+# Apply the fix
+./fix-js-of-ocaml-patches.sh "$BUILD_DIR"
+
+# Continue/retry the install
+opam install js_of_ocaml.6.0.1+ox js_of_ocaml-compiler.6.0.1+ox --verbose
 ```
 
-4. Continue the install:
+3. The installation should now complete successfully.
+
+### Testing the Fix
+
+Run the included test script to verify the fix works:
 ```bash
-opam install js_of_ocaml.6.0.1+ox js_of_ocaml-compiler.6.0.1+ox
+./test-fix.sh
 ```
 
-### Option 2: Manual Fix
+### What the Fix Does
 
-If you prefer to apply the fixes manually:
+The issue occurs because the original patches in the oxcaml opam repository are incompatible with the current js_of_ocaml source structure. The fix script adds:
 
-1. Navigate to the failed build directory
-2. Add the missing functions to `runtime/js/array.js`:
-```javascript
-// Provides: caml_iarray_of_array const
-function caml_iarray_of_array(a) {
-  return a;
-}
+1. **iarray conversion functions**: Identity functions for converting between regular and immutable arrays
+   - `caml_iarray_of_array` 
+   - `caml_array_of_iarray`
 
-// Provides: caml_array_of_iarray const
-function caml_array_of_iarray(a) {
-  return a;
-}
+2. **local floatarray creation**: OCaml 5.x compatible local allocation function
+   - `caml_floatarray_create_local`
 
-//Provides: caml_floatarray_create_local const (const)
-//Requires: caml_floatarray_create
-function caml_floatarray_create_local(x) {
-  return caml_floatarray_create(x);
-}
-```
+3. **WASM exports**: Corresponding WebAssembly function exports
 
-3. Add the missing exports to `runtime/wasm/array.wat` (add before the final `)`):
-```wasm
-   (func (export "caml_iarray_of_array")
-      (param $a (ref eq)) (result (ref eq))
-      (local.get $a))
+These functions are required for the OxCaml compiler extensions to work properly.
 
-   (func (export "caml_array_of_iarray")
-      (param $a (ref eq)) (result (ref eq))
-      (local.get $a))
-```
+### Manual Fix (Alternative)
 
-4. Add the export to the `$caml_floatarray_create` function:
-```wasm
-   (func $caml_floatarray_create
-      (export "caml_floatarray_create_local")
-      (export "caml_make_float_vect") (export "caml_floatarray_create")
-      ...
-```
+If you prefer to apply the fixes manually, see the detailed instructions in the file or refer to the `patches/` directory for the corrected patch files.
 
 ### Files Included
 
-- `fix-js-of-ocaml-patches.sh` - Automated fix script
+- `fix-js-of-ocaml-patches.sh` - Automated fix script ⭐
+- `test-fix.sh` - Test script to verify the fix works
 - `patches/` - Directory containing corrected patch files for reference
-- `patches/README.md` - Additional documentation about the patches
+- `JS_OF_OCAML_FIX.md` - This documentation
 
-### What These Patches Do
-
-1. **iarray-primitives**: Adds identity conversion functions between regular arrays and immutable arrays
-2. **floatarray_create_local**: Adds a local allocation version of floatarray creation for OCaml 5.x compatibility
-
-These functions are required for the OxCaml compiler extensions to work properly with js_of_ocaml.
+This solution resolves the js_of_ocaml-compiler installation issue for the OxCaml project.
