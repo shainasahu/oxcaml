@@ -1,104 +1,99 @@
 open! Core
 
 type player_kind =
-  | X
-  | O
+  | P1
+  | P2
 
-type cell_position =
-  { row : int
-  ; column : int
-  }
+type suit = Hearts | Diamonds | Clubs | Spades
+type rank =
+  | Two | Three | Four | Five | Six | Seven
+  | Eight | Nine | Ten | Jack | Queen | King | Ace
+
+type card = { rank : rank; suit : suit }
 
 type decision =
   | In_progress of { whose_turn : player_kind }
   | Winner of player_kind
-  | Stalemate
 
 type game_state =
-  { board : (cell_position * player_kind) list
-  ; rows : int
-  ; columns : int
-  ; winning_sequence_length : int
+  { hands : (player_kind * card list) list
+  ; discard_pile : card list
+  ; deck : card list
   ; decision : decision
   }
 
-type move = cell_position
+(* A move is either: 
+   - Play a list of cards (multiples allowed if same rank)
+   - Or draw one card and play it if applicable*)
+type move =
+  | Play of card list
+  | Draw_and_maybe_play of card option
 
-(*=
- | |
------
- | |
------
- | |
-*)
 let initial_state : game_state =
-  { board = []
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = X }
+  { hands = [ (P1, [ {rank = Five; suit = Hearts}; {rank = Seven; suit = Spades} ]); 
+              (P2, [ {rank = Four; suit = Diamonds}; {rank = Eight; suit = Clubs} ])]
+  ; discard_pile = []
+  ; deck = [ {rank = Two; suit = Clubs}; 
+             {rank = Three; suit = Diamonds}; 
+            { rank = Nine; suit = Spades} ]
+  ; decision = In_progress { whose_turn = P1 }
   }
 ;;
 
-let move_at_0x0 : move = { row = 0; column = 0 }
+let move_play_5h : move = Play [ {rank = Five; suit = Hearts} ]
 
-(*=
-X| |
------
- | |
------
- | |
-*)
-let state_after_move_at_0x0 : game_state =
-  { board = [ move_at_0x0, X ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = O }
+let state_after_play_5h : game_state =
+  { hands =
+      [ P1, [ {rank = Seven; suit = Spades} ]
+      ; P2, [ {rank = Four; suit = Diamonds}; {rank = Eight; suit = Clubs} ]
+      ]
+  ; discard_pile = [ {rank = Five; suit = Hearts} ]
+  ; deck = [ {rank = Two; suit = Clubs}; 
+             {rank = Three; suit = Diamonds}; 
+             {rank = Nine; suit = Spades} ]
+  ; decision = In_progress { whose_turn = P2 }
   }
 ;;
 
-(*=
- | |X
------
-O|O|X
------
- | |
-*)
+let move_draw_none : move = Draw_and_maybe_play None
+
+let state_after_draw_none : game_state =
+  { hands =
+      [ P1, [ {rank = Seven; suit = Spades} ]
+      ; P2, [ {rank = Four; suit = Diamonds}; 
+              {rank = Eight; suit = Clubs}; 
+              {rank = Two; suit = Clubs} ]
+      ]
+  ; discard_pile = [ {rank = Five; suit = Hearts} ]
+  ; deck = [ {rank = Three; suit = Diamonds}; {rank = Nine; suit = Spades} ]
+  ; decision = In_progress { whose_turn = P1 }
+  }
+;;
+
 let before_terminal_state : game_state =
-  { board =
-      [ { row = 0; column = 2 }, X
-      ; { row = 1; column = 0 }, O
-      ; { row = 1; column = 2 }, X
-      ; { row = 1; column = 1 }, O
+  { hands =
+      [ P1, [ {rank = Seven; suit = Spades} ]
+      ; P2, [ {rank = Four; suit = Diamonds}; 
+              {rank = Eight; suit = Clubs}; 
+              {rank = Two; suit = Clubs} ]
       ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = In_progress { whose_turn = X }
+  ; discard_pile = [ {rank = Five; suit = Hearts} ]
+  ; deck = [ {rank = Three; suit = Diamonds}; {rank = Nine; suit = Spades} ]
+  ; decision = In_progress { whose_turn = P1 }
   }
 ;;
 
-let move_to_terminal_state : move = { row = 2; column = 2 }
+let move_to_terminal_state : move = Play [ {rank = Seven; suit = Spades} ]
 
-(*=
- | |X
------
-O|O|X
------
- | |X
-*)
 let terminal_state : game_state =
-  { board =
-      [ { row = 0; column = 2 }, X
-      ; { row = 1; column = 0 }, O
-      ; { row = 1; column = 2 }, X
-      ; { row = 1; column = 1 }, O
-      ; { row = 2; column = 2 }, X
+  { hands =
+      [ P1, []
+      ; P2, [ {rank = Four; suit = Diamonds}; 
+              {rank = Eight; suit = Clubs}; 
+              {rank = Two; suit = Clubs} ]
       ]
-  ; rows = 3
-  ; columns = 3
-  ; winning_sequence_length = 3
-  ; decision = Winner X
+  ; discard_pile = [ {rank = Seven; suit = Spades}; {rank = Five; suit = Hearts} ]
+  ; deck = [ {rank = Three; suit = Diamonds}; {rank = Nine; suit = Spades} ]
+  ; decision = Winner P1
   }
 ;;

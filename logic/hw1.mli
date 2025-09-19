@@ -1,32 +1,36 @@
 open! Core
 
 type player_kind =
-  | X
-  | O
+  | P1
+  | P2
 
-type cell_position =
-  { row : int
-  ; column : int
-  }
+type suit = Hearts | Diamonds | Clubs | Spades
+type rank =
+  | Two | Three | Four | Five | Six | Seven
+  | Eight | Nine | Ten | Jack | Queen | King | Ace
+
+type card = { rank : rank; suit : suit }
 
 type decision =
   | In_progress of { whose_turn : player_kind }
   | Winner of player_kind
-  | Stalemate
 
 type game_state =
-  { board : (cell_position * player_kind) list
-  ; rows : int
-  ; columns : int
-  ; winning_sequence_length : int
+  { hands : (player_kind * card list) list
+  ; discard_pile : card list
+  ; deck : card list
   ; decision : decision
   }
 
-type move = cell_position
+type move =
+  | Play of card list
+  | Draw_and_maybe_play of card option
 
 val initial_state : game_state
-val move_at_0x0 : move
-val state_after_move_at_0x0 : game_state
+val move_play_5h : move
+val state_after_play_5h : game_state
+val move_draw_none : move
+val state_after_draw_none : game_state
 val before_terminal_state : game_state
 val move_to_terminal_state : move
 val terminal_state : game_state
