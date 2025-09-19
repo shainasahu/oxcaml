@@ -1,0 +1,24 @@
+--- a/runtime/js/array.js
++++ b/runtime/js/array.js
+@@ -232,0 +232,8 @@
++// Provides: caml_iarray_of_array const
++function caml_iarray_of_array(a) {
++  return a;
++}
++
++// Provides: caml_array_of_iarray const
++function caml_array_of_iarray(a) {
++  return a;
++}
+--- a/runtime/wasm/array.wat
++++ b/runtime/wasm/array.wat
+@@ -398,0 +398,9 @@
++
++   (func (export "caml_iarray_of_array")
++      (param $a (ref eq)) (result (ref eq))
++      (local.get $a))
++
++   (func (export "caml_array_of_iarray")
++      (param $a (ref eq)) (result (ref eq))
++      (local.get $a))
+ )
