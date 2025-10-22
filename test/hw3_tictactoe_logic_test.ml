@@ -210,14 +210,21 @@ let%expect_test "Playing multiple cards of same rank" =
       ~p1_hand:[card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds; card Rank.Seven Suit.Clubs] 
       ~p2_hand:[card Rank.Six Suit.Clubs]
       ~deck:[card Rank.Two Suit.Diamonds] 
-      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~discard_pile:[card Rank.Five Suit.Hearts]
       ~whose_turn:Player_kind.P1 
       ~declared_suit:None
   in
   make_move_and_print state (Move.Play [card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds]);
   [%expect
     {|
-    (Error Invalid_play)
+    (Ok
+     ((hands
+       ((P1 (((rank Seven) (suit Clubs)))) (P2 (((rank Six) (suit Clubs))))))
+      (discard_pile
+       (((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds))
+        ((rank Five) (suit Hearts))))
+      (deck (((rank Two) (suit Diamonds))))
+      (decision (In_progress (whose_turn P2) (declared_suit ())))))
     |}]
 ;;
 

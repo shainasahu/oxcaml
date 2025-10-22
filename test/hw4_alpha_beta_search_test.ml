@@ -21,7 +21,6 @@ let print_computer_move (state : Game_state.t) max_depth =
 ;;
 
 let%expect_test "Computer plays a winning move when possible" =
-  (* P1 has one playable card that will win the game *)
   let state = 
     let p1_hand = [card Rank.Five Suit.Hearts] in  (* Only card - will win when played *)
     let p2_hand = [card Rank.Six Suit.Clubs; card Rank.Seven Suit.Diamonds] in
@@ -56,7 +55,6 @@ let%expect_test "Computer plays a winning move when possible" =
 ;;
 
 let%expect_test "Computer plays an eight card to declare favorable suit" =
-  (* P1 has an eight and other cards - should play the eight to control the suit *)
   let state = 
     let p1_hand = [card Rank.Eight Suit.Hearts; card Rank.Seven Suit.Diamonds; card Rank.Six Suit.Clubs] in
     let p2_hand = [card Rank.Nine Suit.Spades; card Rank.Ten Suit.Hearts] in
@@ -91,7 +89,6 @@ let%expect_test "Computer plays an eight card to declare favorable suit" =
 ;;
 
 let%expect_test "Computer draws when no playable cards" =
-  (* P1 has no playable cards, must draw *)
   let state = 
     let p1_hand = [card Rank.Five Suit.Diamonds] in  (* Different suit/rank from discard *)
     let p2_hand = [card Rank.Six Suit.Clubs] in
@@ -126,7 +123,6 @@ let%expect_test "Computer draws when no playable cards" =
 ;;
 
 let%expect_test "Computer plays multiple cards when advantageous" =
-  (* P1 has multiple cards of same rank that are playable *)
   let state = 
     let p1_hand = [card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds; card Rank.Seven Suit.Clubs] in
     let p2_hand = [card Rank.Six Suit.Clubs] in
@@ -160,8 +156,42 @@ let%expect_test "Computer plays multiple cards when advantageous" =
     |}]
 ;;
 
+let%expect_test "Computer plays multiple cards when advantageous" =
+  let state = 
+    let p1_hand = [card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds; card Rank.Seven Suit.Clubs] in
+    let p2_hand = [card Rank.Six Suit.Clubs] in
+    let deck = [card Rank.Two Suit.Diamonds] in
+    let discard_pile = [card Rank.Five Suit.Clubs] in
+    let decision = Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = None } in
+    { Game_state.hands = [Player_kind.P1, p1_hand; Player_kind.P2, p2_hand]
+    ; discard_pile
+    ; deck
+    ; decision
+    }
+  in
+  print_computer_move state 2;
+  [%expect
+    {|
+    ("Computer chooses this move"
+     (move (Play (((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds))))))
+
+    This transitions the game from this state:
+    Top: 5♣
+    P1: 5♥ 5♦ 7♣
+    P2: 6♣
+    Deck: 1 cards
+    Turn: P1
+
+    To this state:
+    Top: 5♥
+    P1: 7♣
+    P2: 6♣
+    Deck: 1 cards
+    Turn: P2
+    |}]
+;;
+
 let%expect_test "Computer considers declared suit when playing" =
-  (* There's a declared suit that P1 can match *)
   let state = 
     let p1_hand = [card Rank.Seven Suit.Hearts; card Rank.Six Suit.Diamonds] in
     let p2_hand = [card Rank.Eight Suit.Clubs] in
