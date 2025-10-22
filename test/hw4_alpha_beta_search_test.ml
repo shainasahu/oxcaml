@@ -40,37 +40,18 @@ let%expect_test "Computer plays a winning move when possible" =
     ("Computer chooses this move" (move (Play (((rank Five) (suit Hearts))))))
 
     This transitions the game from this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Four) (suit Hearts))
-    
-    P1's hand:
-    ((rank Five) (suit Hearts))
-    
-    P2's hand:
-    ((rank Six) (suit Clubs)) ((rank Seven) (suit Diamonds))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P1) (declared_suit ()))
+    Top: 4♥
+    P1: 5♥
+    P2: 6♣ 7♦
+    Deck: 1 cards
+    Turn: P1
     
     To this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Five) (suit Hearts))
-    
-    P1's hand:
-    
-    P2's hand:
-    ((rank Six) (suit Clubs)) ((rank Seven) (suit Diamonds))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (Winner P1)
+    Top: 5♥
+    P1: 
+    P2: 6♣ 7♦
+    Deck: 1 cards
+    Winner: P1
     |}]
 ;;
 
@@ -94,38 +75,18 @@ let%expect_test "Computer plays an eight card to declare favorable suit" =
     ("Computer chooses this move" (move (Play (((rank Eight) (suit Hearts))))))
 
     This transitions the game from this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Four) (suit Spades))
-    
-    P1's hand:
-    ((rank Eight) (suit Hearts)) ((rank Seven) (suit Diamonds)) ((rank Six) (suit Clubs))
-    
-    P2's hand:
-    ((rank Nine) (suit Spades)) ((rank Ten) (suit Hearts))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P1) (declared_suit ()))
+    Top: 4♠
+    P1: 8♥ 7♦ 6♣
+    P2: 9♠ 10♥
+    Deck: 1 cards
+    Turn: P1
     
     To this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Eight) (suit Hearts))
-    
-    P1's hand:
-    ((rank Seven) (suit Diamonds)) ((rank Six) (suit Clubs))
-    
-    P2's hand:
-    ((rank Nine) (suit Spades)) ((rank Ten) (suit Hearts))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P2) (declared_suit (Hearts)))
+    Top: 8♥ (Declared: ♥)
+    P1: 7♦ 6♣
+    P2: 9♠ 10♥
+    Deck: 1 cards
+    Turn: P2
     |}]
 ;;
 
@@ -149,38 +110,18 @@ let%expect_test "Computer draws when no playable cards" =
     ("Computer chooses this move" (move (Draw_and_maybe_play ())))
 
     This transitions the game from this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Four) (suit Spades))
-    
-    P1's hand:
-    ((rank Five) (suit Diamonds))
-    
-    P2's hand:
-    ((rank Six) (suit Clubs))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P1) (declared_suit ()))
+    Top: 4♠
+    P1: 5♦
+    P2: 6♣
+    Deck: 1 cards
+    Turn: P1
     
     To this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Four) (suit Spades))
-    
-    P1's hand:
-    ((rank Five) (suit Diamonds)) ((rank Two) (suit Hearts))
-    
-    P2's hand:
-    ((rank Six) (suit Clubs))
-    
-    Deck size:
-    0
-    
-    Decision:
-    (In_progress (whose_turn P2) (declared_suit ()))
+    Top: 4♠
+    P1: 5♦ 2♥
+    P2: 6♣
+    Deck: 0 cards
+    Turn: P2
     |}]
 ;;
 
@@ -204,38 +145,18 @@ let%expect_test "Computer plays multiple cards when advantageous" =
     ("Computer chooses this move" (move (Play (((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds))))))
 
     This transitions the game from this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Four) (suit Hearts))
-    
-    P1's hand:
-    ((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds)) ((rank Seven) (suit Clubs))
-    
-    P2's hand:
-    ((rank Six) (suit Clubs))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P1) (declared_suit ()))
+    Top: 4♥
+    P1: 5♥ 5♦ 7♣
+    P2: 6♣
+    Deck: 1 cards
+    Turn: P1
     
     To this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Five) (suit Diamonds))
-    
-    P1's hand:
-    ((rank Seven) (suit Clubs))
-    
-    P2's hand:
-    ((rank Six) (suit Clubs))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P2) (declared_suit ()))
+    Top: 5♦
+    P1: 7♣
+    P2: 6♣
+    Deck: 1 cards
+    Turn: P2
     |}]
 ;;
 
@@ -259,38 +180,18 @@ let%expect_test "Computer considers declared suit when playing" =
     ("Computer chooses this move" (move (Play (((rank Seven) (suit Hearts))))))
 
     This transitions the game from this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Four) (suit Spades))
-    
-    P1's hand:
-    ((rank Seven) (suit Hearts)) ((rank Six) (suit Diamonds))
-    
-    P2's hand:
-    ((rank Eight) (suit Clubs))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P1) (declared_suit (Hearts)))
+    Top: 4♠ (Declared: ♥)
+    P1: 7♥ 6♦
+    P2: 8♣
+    Deck: 1 cards
+    Turn: P1
     
     To this state:
-    === Crazy Eights Game State ===
-    Top discard:
-    ((rank Seven) (suit Hearts))
-    
-    P1's hand:
-    ((rank Six) (suit Diamonds))
-    
-    P2's hand:
-    ((rank Eight) (suit Clubs))
-    
-    Deck size:
-    1
-    
-    Decision:
-    (In_progress (whose_turn P2) (declared_suit ()))
+    Top: 7♥
+    P1: 6♦
+    P2: 8♣
+    Deck: 1 cards
+    Turn: P2
     |}]
 ;;
 
