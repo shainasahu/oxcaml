@@ -4,329 +4,311 @@ open Hw2_tictactoe_logic
 open Hw4_alpha_beta_search
 open Hw3_tictactoe_logic_test
 
-type player_kind_or_empty =
-  | E
-  | O
-  | X
+let card rank suit = { Card.rank; suit }
 
-let print_computer_move (board_as_lists : player_kind_or_empty list list) max_depth =
-  let board : Player_kind.t Cell_position.Map.t =
-    List.mapi board_as_lists ~f:(fun row row_as_list ->
-      List.filter_mapi row_as_list ~f:(fun col player_kind_or_empty ->
-        let player_kind : Player_kind.t option =
-          match player_kind_or_empty with
-          | E -> None
-          | O -> Some O
-          | X -> Some X
-        in
-        Option.map player_kind ~f:(fun player_kind : (Cell_position.t * Player_kind.t) ->
-          { row; column = col }, player_kind)))
-    |> List.concat
-    |> Cell_position.Map.of_alist_exn
-  in
-  let whose_turn : Player_kind.t = if Map.length board mod 2 = 0 then X else O in
-  let state : Game_state.t =
-    { board
-    ; rows = 3
-    ; columns = 3
-    ; winning_sequence_length = 3
-    ; decision = In_progress { whose_turn }
-    ; last_move = None
+let print_computer_move (state : Game_state.t) max_depth =
+  let move = alpha_beta state ~depth:max_depth in
+  match move with
+  | None -> 
+    print_endline "No moves available or game is over"
+  | Some move ->
+    let next_state = Game_state.make_move state move |> ok_exn in
+    print_s [%message "Computer chooses this move" (move : Move.t)];
+    print_endline "\nThis transitions the game from this state:";
+    pretty_print_game state;
+    print_endline "\nTo this state:";
+    pretty_print_game next_state
+;;
+
+let%expect_test "Computer plays a winning move when possible" =
+  (* P1 has one playable card that will win the game *)
+  let state = 
+    let p1_hand = [card Rank.Five Suit.Hearts] in  (* Only card - will win when played *)
+    let p2_hand = [card Rank.Six Suit.Clubs; card Rank.Seven Suit.Diamonds] in
+    let deck = [card Rank.Two Suit.Diamonds] in
+    let discard_pile = [card Rank.Four Suit.Hearts] in  (* Same suit as P1's card *)
+    let decision = Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = None } in
+    { Game_state.hands = [Player_kind.P1, p1_hand; Player_kind.P2, p2_hand]
+    ; discard_pile
+    ; deck
+    ; decision
     }
   in
-  let move = alpha_beta state ~depth:max_depth |> Option.value_exn in
-  let next_state = Game_state.make_move state move |> ok_exn in
-  print_s [%message "Computer chooses this move" (move : Move.t)];
-  print_endline "\nThis transitions the game from this state:";
-  pretty_print_board state;
-  print_endline "\nTo this state:";
-  pretty_print_board next_state
-;;
-
-let%expect_test "returns exactly one cell" =
-  print_computer_move [ [ O; O; X ]; [ X; X; O ]; [ O; X; E ] ] 1;
+  print_computer_move state 1;
   [%expect
     {|
-    ("Computer chooses this move" (move ((row 2) (column 2))))
+    ("Computer chooses this move" (move (Play (((rank Five) (suit Hearts))))))
 
     This transitions the game from this state:
-    O|O|X
-    -----
-    X|X|O
-    -----
-    O|X|
-    (In_progress (whose_turn X))
-
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Four) (suit Hearts))
+    
+    P1's hand:
+    ((rank Five) (suit Hearts))
+    
+    P2's hand:
+    ((rank Six) (suit Clubs)) ((rank Seven) (suit Diamonds))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P1) (declared_suit ()))
+    
     To this state:
-    O|O|X
-    -----
-    X|X|O
-    -----
-    O|X|X
-    Stalemate
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Five) (suit Hearts))
+    
+    P1's hand:
+    
+    P2's hand:
+    ((rank Six) (suit Clubs)) ((rank Seven) (suit Diamonds))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (Winner P1)
     |}]
 ;;
 
-let%expect_test "X finds an immediate winning move" =
-  print_computer_move [ [ E; E; O ]; [ O; X; X ]; [ E; X; O ] ] 1;
+let%expect_test "Computer plays an eight card to declare favorable suit" =
+  (* P1 has an eight and other cards - should play the eight to control the suit *)
+  let state = 
+    let p1_hand = [card Rank.Eight Suit.Hearts; card Rank.Seven Suit.Diamonds; card Rank.Six Suit.Clubs] in
+    let p2_hand = [card Rank.Nine Suit.Spades; card Rank.Ten Suit.Hearts] in
+    let deck = [card Rank.Two Suit.Diamonds] in
+    let discard_pile = [card Rank.Four Suit.Spades] in
+    let decision = Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = None } in
+    { Game_state.hands = [Player_kind.P1, p1_hand; Player_kind.P2, p2_hand]
+    ; discard_pile
+    ; deck
+    ; decision
+    }
+  in
+  print_computer_move state 2;
   [%expect
     {|
-    ("Computer chooses this move" (move ((row 0) (column 1))))
+    ("Computer chooses this move" (move (Play (((rank Eight) (suit Hearts))))))
 
     This transitions the game from this state:
-     | |O
-    -----
-    O|X|X
-    -----
-     |X|O
-    (In_progress (whose_turn X))
-
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Four) (suit Spades))
+    
+    P1's hand:
+    ((rank Eight) (suit Hearts)) ((rank Seven) (suit Diamonds)) ((rank Six) (suit Clubs))
+    
+    P2's hand:
+    ((rank Nine) (suit Spades)) ((rank Ten) (suit Hearts))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P1) (declared_suit ()))
+    
     To this state:
-     |X|O
-    -----
-    O|X|X
-    -----
-     |X|O
-    (Winner X)
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Eight) (suit Hearts))
+    
+    P1's hand:
+    ((rank Seven) (suit Diamonds)) ((rank Six) (suit Clubs))
+    
+    P2's hand:
+    ((rank Nine) (suit Spades)) ((rank Ten) (suit Hearts))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P2) (declared_suit (Hearts)))
     |}]
 ;;
 
-let%expect_test "O finds an immediate winning move" =
-  print_computer_move [ [ E; E; O ]; [ O; X; X ]; [ O; X; O ] ] 1;
+let%expect_test "Computer draws when no playable cards" =
+  (* P1 has no playable cards, must draw *)
+  let state = 
+    let p1_hand = [card Rank.Five Suit.Diamonds] in  (* Different suit/rank from discard *)
+    let p2_hand = [card Rank.Six Suit.Clubs] in
+    let deck = [card Rank.Two Suit.Hearts] in
+    let discard_pile = [card Rank.Four Suit.Spades] in
+    let decision = Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = None } in
+    { Game_state.hands = [Player_kind.P1, p1_hand; Player_kind.P2, p2_hand]
+    ; discard_pile
+    ; deck
+    ; decision
+    }
+  in
+  print_computer_move state 1;
   [%expect
     {|
-    ("Computer chooses this move" (move ((row 0) (column 0))))
+    ("Computer chooses this move" (move (Draw_and_maybe_play ())))
 
     This transitions the game from this state:
-     | |O
-    -----
-    O|X|X
-    -----
-    O|X|O
-    (In_progress (whose_turn O))
-
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Four) (suit Spades))
+    
+    P1's hand:
+    ((rank Five) (suit Diamonds))
+    
+    P2's hand:
+    ((rank Six) (suit Clubs))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P1) (declared_suit ()))
+    
     To this state:
-    O| |O
-    -----
-    O|X|X
-    -----
-    O|X|O
-    (Winner O)
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Four) (suit Spades))
+    
+    P1's hand:
+    ((rank Five) (suit Diamonds)) ((rank Two) (suit Hearts))
+    
+    P2's hand:
+    ((rank Six) (suit Clubs))
+    
+    Deck size:
+    0
+    
+    Decision:
+    (In_progress (whose_turn P2) (declared_suit ()))
     |}]
 ;;
 
-let%expect_test "X prevents an immediate win" =
-  print_computer_move [ [ X; E; E ]; [ O; O; E ]; [ X; E; E ] ] 2;
+let%expect_test "Computer plays multiple cards when advantageous" =
+  (* P1 has multiple cards of same rank that are playable *)
+  let state = 
+    let p1_hand = [card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds; card Rank.Seven Suit.Clubs] in
+    let p2_hand = [card Rank.Six Suit.Clubs] in
+    let deck = [card Rank.Two Suit.Diamonds] in
+    let discard_pile = [card Rank.Four Suit.Hearts] in  (* Same suit as one of the Fives *)
+    let decision = Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = None } in
+    { Game_state.hands = [Player_kind.P1, p1_hand; Player_kind.P2, p2_hand]
+    ; discard_pile
+    ; deck
+    ; decision
+    }
+  in
+  print_computer_move state 2;
   [%expect
     {|
-    ("Computer chooses this move" (move ((row 1) (column 2))))
+    ("Computer chooses this move" (move (Play (((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds))))))
 
     This transitions the game from this state:
-    X| |
-    -----
-    O|O|
-    -----
-    X| |
-    (In_progress (whose_turn X))
-
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Four) (suit Hearts))
+    
+    P1's hand:
+    ((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds)) ((rank Seven) (suit Clubs))
+    
+    P2's hand:
+    ((rank Six) (suit Clubs))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P1) (declared_suit ()))
+    
     To this state:
-    X| |
-    -----
-    O|O|X
-    -----
-    X| |
-    (In_progress (whose_turn O))
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Five) (suit Diamonds))
+    
+    P1's hand:
+    ((rank Seven) (suit Clubs))
+    
+    P2's hand:
+    ((rank Six) (suit Clubs))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P2) (declared_suit ()))
     |}]
 ;;
 
-let%expect_test "O prevents an immediate win" =
-  print_computer_move [ [ X; X; E ]; [ O; E; E ]; [ E; E; E ] ] 2;
+let%expect_test "Computer considers declared suit when playing" =
+  (* There's a declared suit that P1 can match *)
+  let state = 
+    let p1_hand = [card Rank.Seven Suit.Hearts; card Rank.Six Suit.Diamonds] in
+    let p2_hand = [card Rank.Eight Suit.Clubs] in
+    let deck = [card Rank.Two Suit.Diamonds] in
+    let discard_pile = [card Rank.Four Suit.Spades] in
+    let decision = Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = Some Suit.Hearts } in
+    { Game_state.hands = [Player_kind.P1, p1_hand; Player_kind.P2, p2_hand]
+    ; discard_pile
+    ; deck
+    ; decision
+    }
+  in
+  print_computer_move state 2;
   [%expect
     {|
-    ("Computer chooses this move" (move ((row 0) (column 2))))
+    ("Computer chooses this move" (move (Play (((rank Seven) (suit Hearts))))))
 
     This transitions the game from this state:
-    X|X|
-    -----
-    O| |
-    -----
-     | |
-    (In_progress (whose_turn O))
-
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Four) (suit Spades))
+    
+    P1's hand:
+    ((rank Seven) (suit Hearts)) ((rank Six) (suit Diamonds))
+    
+    P2's hand:
+    ((rank Eight) (suit Clubs))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P1) (declared_suit (Hearts)))
+    
     To this state:
-    X|X|O
-    -----
-    O| |
-    -----
-     | |
-    (In_progress (whose_turn X))
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Seven) (suit Hearts))
+    
+    P1's hand:
+    ((rank Six) (suit Diamonds))
+    
+    P2's hand:
+    ((rank Eight) (suit Clubs))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P2) (declared_suit ()))
     |}]
 ;;
 
-let%expect_test "O prevents another immediate win" =
-  print_computer_move [ [ X; O; E ]; [ X; O; E ]; [ E; X; E ] ] 2;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 2) (column 0))))
-
-    This transitions the game from this state:
-    X|O|
-    -----
-    X|O|
-    -----
-     |X|
-    (In_progress (whose_turn O))
-
-    To this state:
-    X|O|
-    -----
-    X|O|
-    -----
-    O|X|
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "X finds a winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ X; E; E ]; [ O; X; E ]; [ E; E; O ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 1))))
-
-    This transitions the game from this state:
-    X| |
-    -----
-    O|X|
-    -----
-     | |O
-    (In_progress (whose_turn X))
-
-    To this state:
-    X|X|
-    -----
-    O|X|
-    -----
-     | |O
-    (In_progress (whose_turn O))
-    |}]
-;;
-
-let%expect_test "O finds a winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ E; X; E ]; [ X; X; O ]; [ E; O; E ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 2) (column 2))))
-
-    This transitions the game from this state:
-     |X|
-    -----
-    X|X|O
-    -----
-     |O|
-    (In_progress (whose_turn O))
-
-    To this state:
-     |X|
-    -----
-    X|X|O
-    -----
-     |O|O
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "O finds a cool winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ X; O; X ]; [ X; E; E ]; [ O; E; E ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 2) (column 1))))
-
-    This transitions the game from this state:
-    X|O|X
-    -----
-    X| |
-    -----
-    O| |
-    (In_progress (whose_turn O))
-
-    To this state:
-    X|O|X
-    -----
-    X| |
-    -----
-    O|O|
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "O finds the wrong move due to small depth" =
-  print_computer_move [ [ X; E; E ]; [ E; E; E ]; [ E; E; E ] ] 3;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 1))))
-
-    This transitions the game from this state:
-    X| |
-    -----
-     | |
-    -----
-     | |
-    (In_progress (whose_turn O))
-
-    To this state:
-    X|O|
-    -----
-     | |
-    -----
-     | |
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "O finds the correct move when depth is big enough" =
-  print_computer_move [ [ X; E; E ]; [ E; E; E ]; [ E; E; E ] ] 6;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 1) (column 1))))
-
-    This transitions the game from this state:
-    X| |
-    -----
-     | |
-    -----
-     | |
-    (In_progress (whose_turn O))
-
-    To this state:
-    X| |
-    -----
-     |O|
-    -----
-     | |
-    (In_progress (whose_turn X))
-    |}]
-;;
-
-let%expect_test "X finds a winning move that will lead to winning in 2 steps" =
-  print_computer_move [ [ E; E; E ]; [ O; X; E ]; [ E; E; E ] ] 5;
-  [%expect
-    {|
-    ("Computer chooses this move" (move ((row 0) (column 0))))
-
-    This transitions the game from this state:
-     | |
-    -----
-    O|X|
-    -----
-     | |
-    (In_progress (whose_turn X))
-
-    To this state:
-    X| |
-    -----
-    O|X|
-    -----
-     | |
-    (In_progress (whose_turn O))
-    |}]
+let%expect_test "No move when game is over" =
+  let state = 
+    let p1_hand = [] in  (* P1 has no cards - they won *)
+    let p2_hand = [card Rank.Six Suit.Clubs] in
+    let deck = [card Rank.Two Suit.Diamonds] in
+    let discard_pile = [card Rank.Four Suit.Spades] in
+    let decision = Decision.Winner Player_kind.P1 in
+    { Game_state.hands = [Player_kind.P1, p1_hand; Player_kind.P2, p2_hand]
+    ; discard_pile
+    ; deck
+    ; decision
+    }
+  in
+  print_computer_move state 1;
+  [%expect {|
+    No moves available or game is over
+  |}]
 ;;

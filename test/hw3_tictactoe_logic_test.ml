@@ -2,405 +2,322 @@ open! Core
 open Tictactoe_logic_library
 open Hw2_tictactoe_logic
 
-let ok_exn result = Result.ok result |> Option.value_exn
+let ok_exn result = 
+  match result with
+  | Ok x -> x
+  | Error _ -> failwith "Expected Ok but got Error"
 
-let%test "Example of a unit test (returns bool)" =
-  let state = Game_state.create ~winning_sequence_length:3 ~rows:3 ~columns:3 |> ok_exn in
-  let expected_state : Game_state.t =
-    { board = Cell_position.Map.empty
-    ; rows = 3
-    ; columns = 3
-    ; winning_sequence_length = 3
-    ; decision = In_progress { whose_turn = X }
-    ; last_move = None
-    }
+let card rank suit = { Card.rank; suit }
+
+let create_test_state ~p1_hand ~p2_hand ~deck ~discard_pile ~whose_turn ~declared_suit =
+  let hands = 
+    [ Player_kind.P1, p1_hand
+    ; Player_kind.P2, p2_hand
+    ]
   in
-  Game_state.equal state expected_state
+  let decision = Decision.In_progress { whose_turn; declared_suit } in
+  Game_state.create ~hands ~deck ~discard_pile ~decision |> ok_exn
 ;;
 
-let create_and_print ~winning_sequence_length ~rows ~columns =
-  let result = Game_state.create ~winning_sequence_length ~rows ~columns in
-  print_s [%sexp (result : (Game_state.t, Game_state.Create_error.t list) Result.t)]
+let%test "Basic game state creation" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts] 
+      ~p2_hand:[card Rank.Eight Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Spades]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  match state.decision with
+  | Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = None } -> true
+  | _ -> false
 ;;
 
-let%expect_test "Example of an expect_test (returns unit)" =
-  create_and_print ~winning_sequence_length:3 ~rows:3 ~columns:3;
+let%expect_test "Initial game state creation" =
+  let state = Game_state.For_testing.sample_state in
+  print_s [%sexp (state : Game_state.t)];
   [%expect
     {|
-    (Ok
-     ((board ()) (rows 3) (columns 3) (winning_sequence_length 3)
-      (decision (In_progress (whose_turn X))) (last_move ())))
+    ((hands ((P1 (((rank Five) (suit Hearts))))
+             (P2 (((rank Eight) (suit Clubs))))))
+     (discard_pile ()) (deck (((rank Two) (suit Diamonds))))
+     (decision (In_progress (whose_turn P1) (declared_suit ()))))
     |}]
 ;;
 
-let%expect_test "Game_state.create fails on big (and small) sizes" =
-  create_and_print ~winning_sequence_length:3 ~rows:3 ~columns:3;
-  [%expect
-    {|
-    (Ok
-     ((board ()) (rows 3) (columns 3) (winning_sequence_length 3)
-      (decision (In_progress (whose_turn X))) (last_move ())))
-    |}];
-  create_and_print ~winning_sequence_length:3 ~rows:3 ~columns:20;
-  [%expect {| (Error (Board_too_big_or_small)) |}];
-  create_and_print ~winning_sequence_length:4 ~rows:3 ~columns:3;
-  [%expect {| (Error (Unwinnable_sequence_length)) |}];
-  create_and_print ~winning_sequence_length:30 ~rows:21 ~columns:21;
-  [%expect {| (Error (Board_too_big_or_small Unwinnable_sequence_length)) |}];
-  create_and_print ~winning_sequence_length:1 ~rows:0 ~columns:1;
-  [%expect {| (Error (Board_too_big_or_small)) |}];
-  create_and_print ~winning_sequence_length:1 ~rows:1 ~columns:0;
-  [%expect {| (Error (Board_too_big_or_small)) |}];
-  create_and_print ~winning_sequence_length:1 ~rows:1 ~columns:(-10);
-  [%expect {| (Error (Board_too_big_or_small)) |}];
-  create_and_print ~winning_sequence_length:1 ~rows:(-10) ~columns:1;
-  [%expect {| (Error (Board_too_big_or_small)) |}];
-  create_and_print ~winning_sequence_length:0 ~rows:1 ~columns:1;
-  [%expect {| (Error (Unwinnable_sequence_length)) |}];
-  create_and_print ~winning_sequence_length:(-10) ~rows:1 ~columns:1;
-  [%expect {| (Error (Unwinnable_sequence_length)) |}]
-;;
-
-let%expect_test "Game_state.all_directions" =
-  print_s [%sexp (Game_state.For_testing.all_directions : (int * int) list)];
-  [%expect {| ((-1 -1) (-1 0) (-1 1) (0 -1) (0 1) (1 -1) (1 0) (1 1)) |}]
-;;
-
-let make_move_and_print game_state cell_position =
-  let result = Game_state.make_move game_state cell_position in
+let make_move_and_print game_state move =
+  let result = Game_state.make_move game_state move in
   print_s [%sexp (result : (Game_state.t, Game_state.Move_error.t) Result.t)]
 ;;
 
-let initial_3x3 =
-  Game_state.create ~winning_sequence_length:3 ~rows:3 ~columns:3 |> ok_exn
-;;
-
-let initial_gomoku =
-  Game_state.create ~winning_sequence_length:5 ~rows:15 ~columns:15 |> ok_exn
-;;
-
-let%expect_test "Game_state.make_move in position (0,0) from empty 3x3 board" =
-  make_move_and_print initial_3x3 { row = 0; column = 0 };
+let%expect_test "Playing a valid card" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts; card Rank.Seven Suit.Diamonds] 
+      ~p2_hand:[card Rank.Eight Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  make_move_and_print state (Move.Play [card Rank.Five Suit.Hearts]);
   [%expect
     {|
     (Ok
-     ((board ((((row 0) (column 0)) X))) (rows 3) (columns 3)
-      (winning_sequence_length 3) (decision (In_progress (whose_turn O)))
-      (last_move (((row 0) (column 0))))))
+     ((hands
+       ((P1 (((rank Seven) (suit Diamonds)))) (P2 (((rank Eight) (suit Clubs))))))
+      (discard_pile
+       (((rank Five) (suit Hearts)) ((rank Four) (suit Hearts))))
+      (deck (((rank Two) (suit Diamonds))))
+      (decision (In_progress (whose_turn P2) (declared_suit ())))))
     |}]
 ;;
 
-let%expect_test "Game_state.make_move fails for position (3,2) from empty 3x3 board" =
-  make_move_and_print initial_3x3 { row = 3; column = 2 };
-  [%expect {| (Error Illegal_cell_position) |}]
-;;
-
-let%expect_test "Game_state.make_move fails if playing twice in same position" =
-  let move : Move.t = { row = 0; column = 0 } in
-  let state_after_0x0_move = Game_state.make_move initial_3x3 move |> ok_exn in
-  make_move_and_print state_after_0x0_move move;
-  [%expect {| (Error Space_already_filled) |}]
-;;
-
-let pretty_print_board ({ board; rows; columns; decision; _ } : Game_state.t) =
-  let row_separator =
-    List.range 0 columns |> List.map ~f:(fun _ -> "-") |> String.concat ~sep:"-"
+let%expect_test "Playing an eight card declares suit" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Eight Suit.Hearts; card Rank.Seven Suit.Diamonds] 
+      ~p2_hand:[card Rank.Six Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Spades]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
   in
-  for row = 0 to rows - 1 do
-    List.range 0 columns
-    |> List.map ~f:(fun column ->
-      match Map.find board { row; column } with
-      | None -> " "
-      | Some player -> Player_kind.sexp_of_t player |> Sexp.to_string)
-    |> String.concat ~sep:"|"
-    |> print_endline;
-    if row < rows - 1 then print_endline row_separator
-  done;
-  print_s [%sexp (decision : Decision.t)]
+  make_move_and_print state (Move.Play [card Rank.Eight Suit.Hearts]);
+  [%expect
+    {|
+    (Ok
+     ((hands
+       ((P1 (((rank Seven) (suit Diamonds)))) (P2 (((rank Six) (suit Clubs))))))
+      (discard_pile (((rank Eight) (suit Hearts)) ((rank Four) (suit Spades))))
+      (deck (((rank Two) (suit Diamonds))))
+      (decision (In_progress (whose_turn P2) (declared_suit (Hearts))))))
+    |}]
 ;;
 
-let print_final_state game_state cell_positions =
-  let result =
-    List.fold cell_positions ~init:game_state ~f:(fun new_state cell_position ->
-      Game_state.make_move new_state cell_position |> ok_exn)
+let%expect_test "Must play if possible" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts]
+      ~p2_hand:[card Rank.Six Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
   in
-  pretty_print_board result
+  make_move_and_print state (Move.Draw_and_maybe_play None);
+  [%expect {| (Error Must_play_if_possible) |}]
 ;;
 
-let%expect_test "Game_state.make_move: X makes a move in the middle of the board" =
-  print_final_state initial_3x3 [ { row = 1; column = 1 } ];
+let%expect_test "Drawing when no playable cards" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Diamonds]
+      ~p2_hand:[card Rank.Six Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Hearts]
+      ~discard_pile:[card Rank.Four Suit.Spades]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  make_move_and_print state (Move.Draw_and_maybe_play None);
   [%expect
     {|
-     | |
-    -----
-     |X|
-    -----
-     | |
-    (In_progress (whose_turn O))
+    (Ok
+     ((hands
+       ((P1
+         (((rank Five) (suit Diamonds)) ((rank Two) (suit Hearts))))
+        (P2 (((rank Six) (suit Clubs))))))
+      (discard_pile (((rank Four) (suit Spades))))
+      (deck ())
+      (decision (In_progress (whose_turn P2) (declared_suit ())))))
     |}]
 ;;
 
-let%expect_test "Game_state.make_move: X makes a move, then O makes a move" =
-  print_final_state initial_3x3 [ { row = 1; column = 1 }; { row = 0; column = 0 } ];
+let%expect_test "Winning the game" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts]
+      ~p2_hand:[card Rank.Six Suit.Clubs; card Rank.Seven Suit.Diamonds]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  make_move_and_print state (Move.Play [card Rank.Five Suit.Hearts]);
   [%expect
     {|
-    O| |
-    -----
-     |X|
-    -----
-     | |
-    (In_progress (whose_turn X))
+    (Ok
+     ((hands ((P1 ()) (P2 (((rank Six) (suit Clubs)) ((rank Seven) (suit Diamonds))))))
+      (discard_pile (((rank Five) (suit Hearts)) ((rank Four) (suit Hearts))))
+      (deck (((rank Two) (suit Diamonds))))
+      (decision (Winner P1))))
     |}]
 ;;
 
-let%expect_test "Game_state.make_move: tictactoe X wins vertically" =
-  print_final_state
-    initial_3x3
-    [ { row = 0; column = 2 }
-    ; { row = 1; column = 0 }
-    ; { row = 1; column = 2 }
-    ; { row = 1; column = 1 }
-    ; { row = 2; column = 2 }
-    ];
+let%expect_test "Playing multiple cards of same rank" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds; card Rank.Seven Suit.Clubs] 
+      ~p2_hand:[card Rank.Six Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  make_move_and_print state (Move.Play [card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds]);
   [%expect
     {|
-     | |X
-    -----
-    O|O|X
-    -----
-     | |X
-    (Winner X)
+    (Ok
+     ((hands ((P1 (((rank Seven) (suit Clubs)))) (P2 (((rank Six) (suit Clubs))))))
+      (discard_pile
+       (((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds))
+        ((rank Four) (suit Hearts))))
+      (deck (((rank Two) (suit Diamonds))))
+      (decision (In_progress (whose_turn P2) (declared_suit ())))))
     |}]
 ;;
 
-let%expect_test "Game_state.make_move: tictactoe X wins horizontally" =
-  print_final_state
-    initial_3x3
-    [ { row = 0; column = 0 }
-    ; { row = 1; column = 0 }
-    ; { row = 0; column = 1 }
-    ; { row = 1; column = 1 }
-    ; { row = 0; column = 2 }
-    ];
-  [%expect
-    {|
-    X|X|X
-    -----
-    O|O|
-    -----
-     | |
-    (Winner X)
-    |}]
+let%expect_test "Invalid move - card not in hand" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts] 
+      ~p2_hand:[card Rank.Six Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  make_move_and_print state (Move.Play [card Rank.Seven Suit.Diamonds]);
+  [%expect {| (Error Card_not_in_hand) |}]
 ;;
 
-let%expect_test "Game_state.make_move: tictactoe O wins horizontally" =
-  print_final_state
-    initial_3x3
-    [ { row = 0; column = 0 }
-    ; { row = 1; column = 0 }
-    ; { row = 0; column = 1 }
-    ; { row = 1; column = 1 }
-    ; { row = 2; column = 2 }
-    ; { row = 1; column = 2 }
-    ];
-  [%expect
-    {|
-    X|X|
-    -----
-    O|O|O
-    -----
-     | |X
-    (Winner O)
-    |}]
+let%expect_test "Invalid move - cards not same rank" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts; card Rank.Six Suit.Diamonds] 
+      ~p2_hand:[card Rank.Seven Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds] 
+      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  make_move_and_print state (Move.Play [card Rank.Five Suit.Hearts; card Rank.Six Suit.Diamonds]);
+  [%expect {| (Error Must_play_all_same_rank) |}]
 ;;
 
-let%expect_test "Game_state.make_move: tictactoe O wins diagonally" =
-  print_final_state
-    initial_3x3
-    [ { row = 0; column = 0 }
-    ; { row = 2; column = 0 }
-    ; { row = 0; column = 1 }
-    ; { row = 1; column = 1 }
-    ; { row = 2; column = 2 }
-    ; { row = 0; column = 2 }
-    ];
-  [%expect
-    {|
-    X|X|O
-    -----
-     |O|
-    -----
-    O| |X
-    (Winner O)
-    |}]
+let pretty_print_game (state : Game_state.t) =
+  let print_hand player hand =
+    print_endline (Sexp.to_string (Player_kind.sexp_of_t player) ^ "'s hand:");
+    List.iter hand ~f:(fun card ->
+      print_s [%sexp (card : Card.t)])
+  in
+  print_endline "=== Crazy Eights Game State ===";
+  print_endline "Top discard:";
+  (match Game_state.top_discard state with
+   | None -> print_endline "  None"
+   | Some card -> print_s [%sexp (card : Card.t)]);
+  print_endline "";
+  
+  List.iter state.hands ~f:(fun (player, hand) ->
+    print_hand player hand;
+    print_endline "");
+  
+  print_endline "Deck size:";
+  print_endline (Int.to_string (List.length state.deck));
+  print_endline "";
+  
+  print_endline "Decision:";
+  print_s [%sexp (state.decision : Decision.t)]
 ;;
 
-let%expect_test "Game_state.make_move: tictactoe stalemate" =
-  print_final_state
-    initial_3x3
-    [ { row = 0; column = 0 }
-    ; { row = 1; column = 0 }
-    ; { row = 0; column = 1 }
-    ; { row = 1; column = 1 }
-    ; { row = 2; column = 0 }
-    ; { row = 2; column = 1 }
-    ; { row = 1; column = 2 }
-    ; { row = 0; column = 2 }
-    ; { row = 2; column = 2 }
-    ];
+let%expect_test "Pretty print game state" =
+  let state = Game_state.For_testing.sample_state in
+  pretty_print_game state;
   [%expect
     {|
-    X|X|O
-    -----
-    O|O|X
-    -----
-    X|O|X
-    Stalemate
-    |}]
-;;
-
-let%expect_test "Game_state.make_move: full gomoku game until O wins" =
-  print_final_state
-    initial_gomoku
-    [ { row = 0; column = 0 }
-    ; { row = 1; column = 0 }
-    ; { row = 0; column = 1 }
-    ; { row = 2; column = 1 }
-    ; { row = 0; column = 2 }
-    ; { row = 3; column = 2 }
-    ; { row = 0; column = 3 }
-    ; { row = 4; column = 3 }
-    ; { row = 0; column = 9 }
-    ; { row = 5; column = 4 }
-    ];
-  [%expect
-    {|
-    X|X|X|X| | | | | |X| | | | |
-    -----------------------------
-    O| | | | | | | | | | | | | |
-    -----------------------------
-     |O| | | | | | | | | | | | |
-    -----------------------------
-     | |O| | | | | | | | | | | |
-    -----------------------------
-     | | |O| | | | | | | | | | |
-    -----------------------------
-     | | | |O| | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    -----------------------------
-     | | | | | | | | | | | | | |
-    (Winner O)
-    |}]
-;;
-
-let%expect_test "Game_state.get_all_moves for tictactoe" =
-  let all_moves = Game_state.get_all_moves initial_3x3 in
-  print_s [%message "All moves for 3x3 board" (all_moves : Move.t list)];
-  [%expect
-    {|
-    ("All moves for 3x3 board"
-     (all_moves
-      (((row 0) (column 0)) ((row 0) (column 1)) ((row 0) (column 2))
-       ((row 1) (column 0)) ((row 1) (column 1)) ((row 1) (column 2))
-       ((row 2) (column 0)) ((row 2) (column 1)) ((row 2) (column 2)))))
+    === Crazy Eights Game State ===
+    Top discard:
+      None
+    
+    P1's hand:
+    ((rank Five) (suit Hearts))
+    
+    P2's hand:
+    ((rank Eight) (suit Clubs))
+    
+    Deck size:
+    1
+    
+    Decision:
+    (In_progress (whose_turn P1) (declared_suit ()))
     |}]
 ;;
 
 let random_walk (initial_state : Game_state.t) ~random_seed =
   let rec random_walk (state : Game_state.t) =
-    let all_moves = Game_state.get_all_moves state in
-    let next_states =
-      List.filter_map all_moves ~f:(fun move ->
-        Game_state.make_move state move |> Result.ok)
-    in
-    let random_state = List.random_element next_states |> Option.value_exn in
-    match Decision.is_game_over random_state.decision with
-    | true -> random_state
-    | false -> random_walk random_state
+    let all_moves = Game_state.get_all_valid_moves state in
+    if List.is_empty all_moves then state
+    else
+      let random_move = List.random_element all_moves |> Option.value_exn in
+      match Game_state.make_move state random_move with
+      | Error _ -> state
+      | Ok next_state ->
+        match Decision.is_game_over next_state.decision with
+        | true -> next_state
+        | false -> random_walk next_state
   in
-  (* Set random seed. *)
+  (* Set random seed *)
   Core.Random.init random_seed;
-  pretty_print_board (random_walk initial_state)
+  let final_state = random_walk initial_state in
+  pretty_print_game final_state
 ;;
 
-let%expect_test "TicTacToe random walk till terminal state" =
-  random_walk initial_3x3 ~random_seed:1;
+let%expect_test "Crazy Eights random walk" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts; card Rank.Seven Suit.Diamonds; card Rank.Eight Suit.Clubs]
+      ~p2_hand:[card Rank.Six Suit.Clubs; card Rank.Nine Suit.Spades; card Rank.Ten Suit.Hearts]
+      ~deck:[card Rank.Two Suit.Diamonds; card Rank.Three Suit.Spades; card Rank.Four Suit.Hearts]
+      ~discard_pile:[card Rank.Ace Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  random_walk state ~random_seed:42;
   [%expect
     {|
-    O|O|X
-    -----
-     |X|
-    -----
-    X|O|X
-    (Winner X)
-    |}];
-  random_walk initial_3x3 ~random_seed:3;
+    === Crazy Eights Game State ===
+    Top discard:
+    ((rank Ten) (suit Hearts))
+    
+    P1's hand:
+    ((rank Seven) (suit Diamonds))
+    
+    P2's hand:
+    ((rank Six) (suit Clubs)) ((rank Nine) (suit Spades))
+    
+    Deck size:
+    0
+    
+    Decision:
+    (In_progress (whose_turn P1) (declared_suit ()))
+    |}]
+;;
+
+let%expect_test "Get all valid moves" =
+  let state = 
+    create_test_state 
+      ~p1_hand:[card Rank.Five Suit.Hearts; card Rank.Seven Suit.Diamonds; card Rank.Eight Suit.Clubs]
+      ~p2_hand:[card Rank.Six Suit.Clubs]
+      ~deck:[card Rank.Two Suit.Diamonds]
+      ~discard_pile:[card Rank.Four Suit.Hearts]
+      ~whose_turn:Player_kind.P1 
+      ~declared_suit:None
+  in
+  let moves = Game_state.get_all_valid_moves state in
+  print_s [%sexp (moves : Move.t list)];
   [%expect
     {|
-    X|X|O
-    -----
-    O|O|X
-    -----
-    X|X|O
-    Stalemate
-    |}];
-  random_walk initial_3x3 ~random_seed:1234;
-  [%expect
-    {|
-    X| |O
-    -----
-    X| |O
-    -----
-    X|O|X
-    (Winner X)
-    |}];
-  random_walk initial_gomoku ~random_seed:1;
-  [%expect
-    {|
-     | |O| |X|X|X| | | |O| | |X|
-    -----------------------------
-    O|O| | | |O| | |X|X|X|O|X| |X
-    -----------------------------
-    X| | | |O|X| |X| | | | | | |X
-    -----------------------------
-     | | |O| |X|O| | | |X| | | |X
-    -----------------------------
-     | | |O| | | |O|O| | |O| | |X
-    -----------------------------
-    O|X|X|X|X|X| | |O| | |X| | |
-    -----------------------------
-     |O| | | | | |O| |O|O|O|O| |X
-    -----------------------------
-    X| | |O| |O|O| |X| | | | |O|O
-    -----------------------------
-     | | |O| |X|O|O| |O|X| | | |
-    -----------------------------
-    O| |X| |O|O| | | | | | | | |
-    -----------------------------
-     |X| |O| | | |X|O| |X| | |X|
-    -----------------------------
-     | | | |X|X| | |O| |X|O| |X|
-    -----------------------------
-     |O| | | | | | |O|X|X|X| | |
-    -----------------------------
-    O| |X| |X|X| | |X| | |O| | |O
-    -----------------------------
-     |O|O|X| | |X| | | | | | | |O
-    (Winner X)
+    ((Play (((rank Five) (suit Hearts)) ((rank Eight) (suit Clubs)))))
     |}]
 ;;
