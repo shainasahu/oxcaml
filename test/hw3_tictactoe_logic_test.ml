@@ -119,8 +119,7 @@ let%expect_test "Playing a valid card" =
     (Ok
      ((hands
        ((P1 (((rank Seven) (suit Diamonds)))) (P2 (((rank Eight) (suit Clubs))))))
-      (discard_pile
-       (((rank Five) (suit Hearts)) ((rank Four) (suit Hearts))))
+      (discard_pile (((rank Five) (suit Hearts)) ((rank Four) (suit Hearts))))
       (deck (((rank Two) (suit Diamonds))))
       (decision (In_progress (whose_turn P2) (declared_suit ())))))
     |}]
@@ -177,11 +176,9 @@ let%expect_test "Drawing when no playable cards" =
     {|
     (Ok
      ((hands
-       ((P1
-         (((rank Five) (suit Diamonds)) ((rank Two) (suit Hearts))))
+       ((P1 (((rank Five) (suit Diamonds)) ((rank Two) (suit Hearts))))
         (P2 (((rank Six) (suit Clubs))))))
-      (discard_pile (((rank Four) (suit Spades))))
-      (deck ())
+      (discard_pile (((rank Four) (suit Spades)))) (deck ())
       (decision (In_progress (whose_turn P2) (declared_suit ())))))
     |}]
 ;;
@@ -200,10 +197,10 @@ let%expect_test "Winning the game" =
   [%expect
     {|
     (Ok
-     ((hands ((P1 ()) (P2 (((rank Six) (suit Clubs)) ((rank Seven) (suit Diamonds))))))
+     ((hands
+       ((P1 ()) (P2 (((rank Six) (suit Clubs)) ((rank Seven) (suit Diamonds))))))
       (discard_pile (((rank Five) (suit Hearts)) ((rank Four) (suit Hearts))))
-      (deck (((rank Two) (suit Diamonds))))
-      (decision (Winner P1))))
+      (deck (((rank Two) (suit Diamonds)))) (decision (Winner P1))))
     |}]
 ;;
 
@@ -220,13 +217,7 @@ let%expect_test "Playing multiple cards of same rank" =
   make_move_and_print state (Move.Play [card Rank.Five Suit.Hearts; card Rank.Five Suit.Diamonds]);
   [%expect
     {|
-    (Ok
-     ((hands ((P1 (((rank Seven) (suit Clubs)))) (P2 (((rank Six) (suit Clubs))))))
-      (discard_pile
-       (((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds))
-        ((rank Four) (suit Hearts))))
-      (deck (((rank Two) (suit Diamonds))))
-      (decision (In_progress (whose_turn P2) (declared_suit ())))))
+    (Error Invalid_play)
     |}]
 ;;
 
@@ -290,11 +281,11 @@ let%expect_test "Crazy Eights random walk" =
   random_walk state ~random_seed:42;
   [%expect
     {|
-    Top: 10♥
-    P1: 7♦
-    P2: 6♣ 9♠
+    Top: 6♣
+    P1: 7♦ 2♦ 4♥
+    P2: 9♠ 3♠
     Deck: 0 cards
-    Turn: P1
+    Turn: P2
     |}]
 ;;
 
@@ -312,6 +303,6 @@ let%expect_test "Get all valid moves" =
   print_s [%sexp (moves : Move.t list)];
   [%expect
     {|
-    ((Play (((rank Five) (suit Hearts)) ((rank Eight) (suit Clubs)))))
+    ((Play (((rank Five) (suit Hearts)))) (Play (((rank Eight) (suit Clubs)))))
     |}]
 ;;

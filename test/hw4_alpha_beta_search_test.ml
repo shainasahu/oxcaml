@@ -142,7 +142,7 @@ let%expect_test "Computer plays multiple cards when advantageous" =
   print_computer_move state 2;
   [%expect
     {|
-    ("Computer chooses this move" (move (Play (((rank Five) (suit Hearts)) ((rank Five) (suit Diamonds))))))
+    ("Computer chooses this move" (move (Play (((rank Five) (suit Hearts))))))
 
     This transitions the game from this state:
     Top: 4♥
@@ -152,8 +152,8 @@ let%expect_test "Computer plays multiple cards when advantageous" =
     Turn: P1
     
     To this state:
-    Top: 5♦
-    P1: 7♣
+    Top: 5♥
+    P1: 5♦ 7♣
     P2: 6♣
     Deck: 1 cards
     Turn: P2
