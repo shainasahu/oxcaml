@@ -3,25 +3,33 @@ open Hw2_tictactoe_logic
 
 let heuristic_value (node : Game_state.t) =
   match node.decision with
-  | Stalemate -> 0
-  | In_progress _ ->
-    (* For more complex games, like Gomoku/connect6, we should have here a heuristic
-       function that scores how good this state for player X, i.e., the higher the number
-       the better it is for X. *)
-    0
-  | Winner player_kind ->
+  | Decision.In_progress { whose_turn; declared_suit = _ } ->
+    (* heuristic: score based on hand advantage *)
+    (* lower score is better (fewer cards in hand) *)
+    let current_player_hand =
+      List.Assoc.find_exn node.hands ~equal:Player_kind.equal whose_turn |> List.length
+    in
+    let opponent_hand =
+      List.Assoc.find_exn
+        node.hands
+        ~equal:Player_kind.equal
+        (Player_kind.opposite whose_turn)
+      |> List.length
+    in
+    opponent_hand - current_player_hand
+  | Decision.Winner player_kind ->
     (match player_kind with
-     | X -> Int.max_value
-     | O -> Int.min_value)
+     | Player_kind.P1 -> Int.max_value
+     | Player_kind.P2 -> Int.min_value)
 ;;
 
 let children node ~(sort_by_whose_turn : Player_kind.t) =
   let compare =
     match sort_by_whose_turn with
-    | X -> Int.descending
-    | O -> Int.ascending
+    | Player_kind.P1 -> Int.descending
+    | Player_kind.P2 -> Int.ascending
   in
-  let moves = Game_state.get_all_moves node in
+  let moves = Game_state.get_all_valid_moves node in
   List.filter_map moves ~f:(fun move -> Game_state.make_move node move |> Result.ok)
   (* Sorting the children by heuristic values gives the best alpha-beta pruning. *)
   |> List.sort ~compare:(Comparable.lift ~f:heuristic_value compare)
@@ -55,9 +63,9 @@ alphabeta(origin, depth, −∞, +∞, TRUE)
 *)
 let rec alpha_beta (node : Game_state.t) depth alpha beta =
   match node.decision with
-  | In_progress { whose_turn } when depth > 0 ->
+  | Decision.In_progress { whose_turn; declared_suit = _ } when depth > 0 ->
     (match whose_turn with
-     | X ->
+     | Player_kind.P1 ->
        List.fold_until
          (children node ~sort_by_whose_turn:whose_turn)
          ~init:(Int.min_value, alpha)
@@ -66,7 +74,7 @@ let rec alpha_beta (node : Game_state.t) depth alpha beta =
            let value = Int.max value (alpha_beta child (depth - 1) alpha beta) in
            let alpha = Int.max alpha value in
            if value >= beta then Stop value else Continue (value, alpha))
-     | O ->
+     | Player_kind.P2 ->
        List.fold_until
          (children node ~sort_by_whose_turn:whose_turn)
          ~init:(Int.max_value, beta)
@@ -80,9 +88,9 @@ let rec alpha_beta (node : Game_state.t) depth alpha beta =
 
 let alpha_beta (node : Game_state.t) ~depth =
   match node.decision with
-  | Winner _ | Stalemate -> None
-  | In_progress { whose_turn } ->
-    let moves = Game_state.get_all_moves node in
+  | Decision.Winner _ -> None
+  | Decision.In_progress { whose_turn; declared_suit = _ } ->
+    let moves = Game_state.get_all_valid_moves node in
     let moves_and_children =
       List.filter_map moves ~f:(fun move ->
         Game_state.make_move node move
@@ -95,8 +103,8 @@ let alpha_beta (node : Game_state.t) ~depth =
     in
     let best_move =
       (match whose_turn with
-       | X -> List.max_elt
-       | O -> List.min_elt)
+       | Player_kind.P1 -> List.max_elt
+       | Player_kind.P2 -> List.min_elt)
         moves_and_children_and_values
         ~compare:(fun (_move, _child, v1) (_move, _child, v2) -> Int.compare v1 v2)
       |> Option.map ~f:(fun (move, _child, _value) -> move)
