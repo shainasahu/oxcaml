@@ -31,7 +31,10 @@ type card =
   }
 
 type decision =
-  | In_progress of { whose_turn : player_kind }
+  | In_progress of
+      { whose_turn : player_kind
+      ; declared_suit : suit option
+      }
   | Winner of player_kind
 
 type game_state =
@@ -59,7 +62,7 @@ let initial_state : game_state =
       ; { rank = Three; suit = Diamonds }
       ; { rank = Nine; suit = Spades }
       ]
-  ; decision = In_progress { whose_turn = P1 }
+  ; decision = In_progress { whose_turn = P1; declared_suit = None }
   }
 ;;
 
@@ -76,7 +79,7 @@ let state_after_play_5h : game_state =
       ; { rank = Three; suit = Diamonds }
       ; { rank = Nine; suit = Spades }
       ]
-  ; decision = In_progress { whose_turn = P2 }
+  ; decision = In_progress { whose_turn = P2; declared_suit = None }
   }
 ;;
 
@@ -93,7 +96,7 @@ let state_after_draw_none : game_state =
       ]
   ; discard_pile = [ { rank = Five; suit = Hearts } ]
   ; deck = [ { rank = Three; suit = Diamonds }; { rank = Nine; suit = Spades } ]
-  ; decision = In_progress { whose_turn = P1 }
+  ; decision = In_progress { whose_turn = P1; declared_suit = None }
   }
 ;;
 
@@ -108,7 +111,7 @@ let before_terminal_state : game_state =
       ]
   ; discard_pile = [ { rank = Five; suit = Hearts } ]
   ; deck = [ { rank = Three; suit = Diamonds }; { rank = Nine; suit = Spades } ]
-  ; decision = In_progress { whose_turn = P1 }
+  ; decision = In_progress { whose_turn = P1; declared_suit = None }
   }
 ;;
 

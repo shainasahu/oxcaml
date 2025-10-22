@@ -2,72 +2,105 @@ open! Core
 
 module Player_kind : sig
   type t =
-    | X
-    | O
+    | P1
+    | P2
   [@@deriving sexp, compare, equal]
 
   val opposite : t -> t
 end
 
-module Cell_position : sig
+module Suit : sig
   type t =
-    { row : int
-    ; column : int
-    }
-  [@@deriving sexp, compare]
-
-  (* Defines a [Cell_position.Map.t]. *)
-  include Comparable.S with type t := t
+    | Hearts
+    | Diamonds
+    | Clubs
+    | Spades
+  [@@deriving sexp, compare, equal, enumerate]
 end
 
-module Move : module type of Cell_position
+module Rank : sig
+  type t =
+    | Two
+    | Three
+    | Four
+    | Five
+    | Six
+    | Seven
+    | Eight
+    | Nine
+    | Ten
+    | Jack
+    | Queen
+    | King
+    | Ace
+  [@@deriving sexp, compare, equal, enumerate]
+end
+
+module Card : sig
+  type t =
+    { rank : Rank.t
+    ; suit : Suit.t
+    }
+  [@@deriving sexp, compare, equal]
+end
 
 module Decision : sig
   type t =
-    | In_progress of { whose_turn : Player_kind.t }
+    | In_progress of
+        { whose_turn : Player_kind.t
+        ; declared_suit : Suit.t option
+        }
     | Winner of Player_kind.t
-    | Stalemate
   [@@deriving sexp, compare, equal]
 
   val is_game_over : t -> bool
 end
 
+module Move : sig
+  type t =
+    | Play of Card.t list
+    | Draw_and_maybe_play of Card.t option
+    (** draw one card from the deck, if playable, must play *)
+  [@@deriving sexp, compare, equal]
+end
+
 module Game_state : sig
   type t =
-    { board : Player_kind.t Cell_position.Map.t
-    ; rows : int
-    ; columns : int
-    ; winning_sequence_length : int
+    { hands : (Player_kind.t * Card.t list) list
+    ; discard_pile : Card.t list
+    ; deck : Card.t list
     ; decision : Decision.t
-    ; last_move : Move.t option (* For animation purposes. *)
     }
   [@@deriving sexp, compare, equal]
 
   module Create_error : sig
-    type t =
-      | Board_too_big_or_small
-      | Unwinnable_sequence_length
-    [@@deriving sexp, compare]
+    type t = Invalid_initial_setup [@@deriving sexp, compare]
   end
 
   val create
-    :  rows:int
-    -> columns:int
-    -> winning_sequence_length:int
+    :  hands:(Player_kind.t * Card.t list) list
+    -> deck:Card.t list
+    -> discard_pile:Card.t list
+    -> decision:Decision.t
     -> (t, Create_error.t list) Result.t
 
   module Move_error : sig
     type t =
       | Game_is_over
-      | Space_already_filled
-      | Illegal_cell_position
+      | Card_not_in_hand
+      | Invalid_play
+      | Must_play_if_possible
+      | Must_play_all_same_rank
+      | Deck_empty
     [@@deriving sexp, compare]
   end
 
-  val get_all_moves : t -> Move.t list
+  val get_all_valid_moves : t -> Move.t list
   val make_move : t -> Move.t -> (t, Move_error.t) Result.t
+  val top_discard : t -> Card.t option
 
   module For_testing : sig
-    val all_directions : (int * int) list
+    val sample_state : t
+    val empty_deck_state : t
   end
 end

@@ -31,7 +31,10 @@ type card =
   }
 
 type decision =
-  | In_progress of { whose_turn : player_kind }
+  | In_progress of
+      { whose_turn : player_kind
+      ; declared_suit : suit option
+      }
   | Winner of player_kind
 
 type game_state =

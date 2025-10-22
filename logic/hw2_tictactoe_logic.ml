@@ -2,189 +2,331 @@ open! Core
 
 module Player_kind = struct
   type t =
-    | X
-    | O
+    | P1
+    | P2
   [@@deriving sexp, compare, equal]
 
-  (* It's clearer to use type inference and just write:
-     [let opposite t =]
-  *)
   let opposite (t : t) : t =
     match t with
-    | X -> O
-    | O -> X
+    | P1 -> P2
+    | P2 -> P1
   ;;
 end
 
-module Cell_position = struct
-  module T = struct
-    type t =
-      { row : int
-      ; column : int
-      }
-    [@@deriving sexp, compare]
-  end
-
-  include T
-
-  (* Creates a [Cell_position.Map.t]. *)
-  include Comparable.Make (T)
+module Suit = struct
+  type t =
+    | Hearts
+    | Diamonds
+    | Clubs
+    | Spades
+  [@@deriving sexp, compare, equal, enumerate]
 end
 
-module Move = Cell_position
+module Rank = struct
+  type t =
+    | Two
+    | Three
+    | Four
+    | Five
+    | Six
+    | Seven
+    | Eight
+    | Nine
+    | Ten
+    | Jack
+    | Queen
+    | King
+    | Ace
+  [@@deriving sexp, compare, equal, enumerate]
+end
+
+module Card = struct
+  type t =
+    { rank : Rank.t
+    ; suit : Suit.t
+    }
+  [@@deriving sexp, compare, equal]
+end
 
 module Decision = struct
   type t =
-    | In_progress of { whose_turn : Player_kind.t }
+    | In_progress of
+        { whose_turn : Player_kind.t
+        ; declared_suit : Suit.t option
+        }
     | Winner of Player_kind.t
-    | Stalemate
   [@@deriving sexp, compare, equal]
 
   let is_game_over t =
     match t with
-    | Stalemate | Winner _ -> true
+    | Winner _ -> true
     | In_progress _ -> false
   ;;
 end
 
+module Move = struct
+  type t =
+    | Play of Card.t list
+    | Draw_and_maybe_play of Card.t option
+  [@@deriving sexp, compare, equal]
+end
+
 module Game_state = struct
   type t =
-    { board : Player_kind.t Cell_position.Map.t
-    ; rows : int
-    ; columns : int
-    ; winning_sequence_length : int
+    { hands : (Player_kind.t * Card.t list) list
+    ; discard_pile : Card.t list
+    ; deck : Card.t list
     ; decision : Decision.t
-    ; last_move : Move.t option (* For animation purposes. *)
     }
   [@@deriving sexp, compare, equal]
 
   module Create_error = struct
-    type t =
-      | Board_too_big_or_small
-      | Unwinnable_sequence_length
-    [@@deriving sexp, compare]
+    type t = Invalid_initial_setup [@@deriving sexp, compare]
   end
-
-  let create ~rows ~columns ~winning_sequence_length : (t, Create_error.t list) Result.t =
-    let size_ok = rows < 20 && columns < 20 && rows > 0 && columns > 0 in
-    let sequence_length_ok =
-      (winning_sequence_length <= rows || winning_sequence_length <= columns)
-      && winning_sequence_length > 0
-    in
-    match size_ok, sequence_length_ok with
-    | true, true ->
-      Ok
-        { board = Cell_position.Map.empty
-        ; winning_sequence_length
-        ; rows
-        ; columns
-        ; decision = In_progress { whose_turn = X }
-        ; last_move = None
-        }
-    | _ ->
-      Error
-        ((if size_ok then [] else [ Create_error.Board_too_big_or_small ])
-         @ if sequence_length_ok then [] else [ Create_error.Unwinnable_sequence_length ]
-        )
-  ;;
-
-  let value_if_all_the_same list =
-    match list with
-    | hd :: tl -> if List.for_all tl ~f:(Player_kind.equal hd) then Some hd else None
-    | [] -> None
-  ;;
-
-  let check_direction_starting_from
-        ~vertical_delta
-        ~horizontal_delta
-        { board; winning_sequence_length; _ }
-        ({ row; column } : Cell_position.t)
-    =
-    let cells =
-      List.range 0 winning_sequence_length
-      |> List.filter_map ~f:(fun i ->
-        Map.find
-          board
-          { row = row + (i * vertical_delta); column = column + (i * horizontal_delta) })
-    in
-    if List.length cells >= winning_sequence_length
-    then value_if_all_the_same cells
-    else None
-  ;;
-
-  let deltas = List.init 3 ~f:(fun i -> i - 1)
-
-  let all_directions =
-    List.cartesian_product deltas deltas
-    |> List.filter ~f:(fun (vertical_delta, horizontal_delta) ->
-      vertical_delta <> 0 || horizontal_delta <> 0)
-  ;;
-
-  let check_all_directions t cell_position =
-    all_directions
-    |> List.filter_map ~f:(fun (vertical_delta, horizontal_delta) ->
-      check_direction_starting_from ~vertical_delta ~horizontal_delta t cell_position)
-    |> value_if_all_the_same
-  ;;
-
-  (** Checks every position on the board, paired with every one of the eight directions,
-      and walks in that direction the length of a winning sequence. If all the cells it
-      visits are owned by a player, then that player has won.
-
-      Note that this is not an incredibly efficient algorithm, but it is a simple and
-      correct one. One could improve performance and just check all directions around the
-      most recently played position (and sum the sequence lengths of opposite directions).
-
-      Also note that if there are multiple win sequences, this algorithm will pick the
-      first one it finds. This is fine because game play stops when the first win-sequence
-      has been created. *)
-  let check_winner t =
-    Map.filter_keys t.board ~f:(fun cell_position ->
-      check_all_directions t cell_position |> Option.is_some)
-    |> Map.min_elt
-    |> Option.map ~f:snd
-  ;;
-
-  let is_legal_cell_position { rows; columns; _ } ({ row; column } : Cell_position.t) =
-    0 <= row && 0 <= column && row < rows && column < columns
-  ;;
 
   module Move_error = struct
     type t =
       | Game_is_over
-      | Space_already_filled
-      | Illegal_cell_position
+      | Card_not_in_hand
+      | Invalid_play
+      | Must_play_if_possible
+      | Must_play_all_same_rank
+      | Deck_empty
     [@@deriving sexp, compare]
   end
 
-  let get_all_moves t : Move.t list =
-    let rows = List.range 0 t.rows in
-    let columns = List.range 0 t.columns in
-    List.cartesian_product rows columns
-    |> List.map ~f:(fun (row, column) : Move.t -> { row; column })
+  let top_discard t =
+    match t.discard_pile with
+    | [] -> None
+    | top :: _ -> Some top
   ;;
 
-  let make_move t (cell_position : Move.t) : (t, Move_error.t) Result.t =
+  let create ~hands ~deck ~discard_pile ~decision =
+    if List.is_empty hands
+    then Error [ Create_error.Invalid_initial_setup ]
+    else Ok { hands; deck; discard_pile; decision }
+  ;;
+
+  (* helper - can this card be played on top of discard *)
+  let card_playable
+        ~(top_discard : Card.t option)
+        ~(declared_suit_option : Suit.t option)
+        (card : Card.t)
+    =
+    match top_discard with
+    | None -> true
+    | Some top ->
+      (match card.rank with
+       | Rank.Eight -> true
+       | _ ->
+         (match declared_suit_option with
+          | Some declared_suit_val -> Suit.equal card.suit declared_suit_val
+          | None -> Suit.equal card.suit top.suit || Rank.equal card.rank top.rank))
+  ;;
+
+  let playable_cards t =
     match t.decision with
-    | _ when not (is_legal_cell_position t cell_position) -> Error Illegal_cell_position
-    | Winner _ | Stalemate -> Error Game_is_over
-    | In_progress { whose_turn } ->
-      (match Map.find t.board cell_position with
-       | Some _ -> Error Space_already_filled
-       | None ->
-         let board = Map.set t.board ~key:cell_position ~data:whose_turn in
-         let decision : Decision.t =
-           match check_winner { t with board } with
-           | Some player_kind -> Winner player_kind
-           | None ->
-             if Map.length board >= t.columns * t.rows
-             then Stalemate
-             else In_progress { whose_turn = Player_kind.opposite whose_turn }
-         in
-         Ok { t with board; decision; last_move = Some cell_position })
+    | Decision.Winner _ -> []
+    | Decision.In_progress { whose_turn; declared_suit } ->
+      let hand = List.Assoc.find_exn t.hands ~equal:Player_kind.equal whose_turn in
+      List.filter hand ~f:(fun card ->
+        card_playable
+          ~top_discard:(top_discard t)
+          ~declared_suit_option:declared_suit
+          card)
+  ;;
+
+  let get_all_valid_moves t =
+    match t.decision with
+    | Decision.Winner _ -> []
+    | Decision.In_progress { whose_turn = _; declared_suit = _ } ->
+      let playable = playable_cards t in
+      if List.is_empty playable
+      then [ Move.Draw_and_maybe_play None ]
+      else (
+        let playable_sorted =
+          List.sort playable ~compare:(fun a b -> Rank.compare a.rank b.rank)
+        in
+        let rank_groups =
+          List.group playable_sorted ~break:(fun a b -> not (Rank.equal a.rank b.rank))
+        in
+        List.map rank_groups ~f:(fun group -> Move.Play group))
+  ;;
+
+  let make_move t (mv : Move.t) =
+    match t.decision with
+    | Decision.Winner _ -> Error Move_error.Game_is_over
+    | Decision.In_progress { whose_turn; declared_suit } ->
+      let hand = List.Assoc.find_exn t.hands ~equal:Player_kind.equal whose_turn in
+      (match mv with
+       | Move.Play cards ->
+         if List.is_empty cards
+         then Error Move_error.Invalid_play
+         else if
+           (* check all cards are in hand *)
+           not (List.for_all cards ~f:(fun c -> List.mem hand c ~equal:Card.equal))
+         then Error Move_error.Card_not_in_hand
+         else (
+           (* check all cards have same rank *)
+           let first_rank = (List.hd_exn cards).rank in
+           if not (List.for_all cards ~f:(fun c -> Rank.equal c.rank first_rank))
+           then Error Move_error.Must_play_all_same_rank
+           else (
+             (* check if player has playable cards *)
+             let playable = playable_cards t in
+             if List.is_empty playable
+             then Error Move_error.Must_play_if_possible
+             else if
+               (* check all played cards are playable *)
+               not
+                 (List.for_all cards ~f:(fun c ->
+                    card_playable
+                      ~top_discard:(top_discard t)
+                      ~declared_suit_option:declared_suit
+                      c))
+             then Error Move_error.Invalid_play
+             else (
+               let new_hand =
+                 List.filter hand ~f:(fun c -> not (List.mem cards c ~equal:Card.equal))
+               in
+               let new_discard = cards @ t.discard_pile in
+               let new_declared_suit =
+                 match cards with
+                 | first :: _ when Rank.equal first.rank Rank.Eight -> Some first.suit
+                 | _ -> None
+               in
+               let new_decision =
+                 if List.is_empty new_hand
+                 then Decision.Winner whose_turn
+                 else
+                   Decision.In_progress
+                     { whose_turn = Player_kind.opposite whose_turn
+                     ; declared_suit = new_declared_suit
+                     }
+               in
+               let new_hands =
+                 List.Assoc.add t.hands ~equal:Player_kind.equal whose_turn new_hand
+               in
+               Ok
+                 { t with
+                   hands = new_hands
+                 ; discard_pile = new_discard
+                 ; decision = new_decision
+                 })))
+       | Move.Draw_and_maybe_play card_option ->
+         (match card_option with
+          | None ->
+            let playable = playable_cards t in
+            if not (List.is_empty playable)
+            then Error Move_error.Must_play_if_possible
+            else (
+              match t.deck with
+              | [] -> Error Move_error.Deck_empty
+              | top :: rest ->
+                let new_hand = hand @ [ top ] in
+                let new_hands =
+                  List.Assoc.add t.hands ~equal:Player_kind.equal whose_turn new_hand
+                in
+                if
+                  card_playable
+                    ~top_discard:(top_discard t)
+                    ~declared_suit_option:declared_suit
+                    top
+                then (
+                  let new_hand_after_play =
+                    List.filter new_hand ~f:(fun c -> not (Card.equal c top))
+                  in
+                  let new_discard = top :: t.discard_pile in
+                  let new_declared_suit =
+                    if Rank.equal top.rank Rank.Eight then Some top.suit else None
+                  in
+                  let new_decision =
+                    if List.is_empty new_hand_after_play
+                    then Decision.Winner whose_turn
+                    else
+                      Decision.In_progress
+                        { whose_turn = Player_kind.opposite whose_turn
+                        ; declared_suit = new_declared_suit
+                        }
+                  in
+                  let final_hands =
+                    List.Assoc.add
+                      t.hands
+                      ~equal:Player_kind.equal
+                      whose_turn
+                      new_hand_after_play
+                  in
+                  Ok
+                    { hands = final_hands
+                    ; deck = rest
+                    ; discard_pile = new_discard
+                    ; decision = new_decision
+                    })
+                else (
+                  let new_decision =
+                    Decision.In_progress
+                      { whose_turn = Player_kind.opposite whose_turn; declared_suit }
+                  in
+                  Ok { t with hands = new_hands; deck = rest; decision = new_decision }))
+          | Some card ->
+            if not (List.mem t.deck card ~equal:Card.equal)
+            then Error Move_error.Invalid_play
+            else if
+              not
+                (card_playable
+                   ~top_discard:(top_discard t)
+                   ~declared_suit_option:declared_suit
+                   card)
+            then Error Move_error.Invalid_play
+            else (
+              let new_deck = List.filter t.deck ~f:(fun c -> not (Card.equal c card)) in
+              let new_hand = hand @ [ card ] in
+              let new_hand_after_play =
+                List.filter new_hand ~f:(fun c -> not (Card.equal c card))
+              in
+              let new_discard = card :: t.discard_pile in
+              let new_declared_suit =
+                if Rank.equal card.rank Rank.Eight then Some card.suit else None
+              in
+              let new_decision =
+                if List.is_empty new_hand_after_play
+                then Decision.Winner whose_turn
+                else
+                  Decision.In_progress
+                    { whose_turn = Player_kind.opposite whose_turn
+                    ; declared_suit = new_declared_suit
+                    }
+              in
+              let new_hands =
+                List.Assoc.add
+                  t.hands
+                  ~equal:Player_kind.equal
+                  whose_turn
+                  new_hand_after_play
+              in
+              Ok
+                { hands = new_hands
+                ; deck = new_deck
+                ; discard_pile = new_discard
+                ; decision = new_decision
+                })))
   ;;
 
   module For_testing = struct
-    let all_directions = all_directions
+    let sample_state =
+      let hands =
+        [ Player_kind.P1, [ { Card.rank = Rank.Five; suit = Suit.Hearts } ]
+        ; Player_kind.P2, [ { Card.rank = Rank.Eight; suit = Suit.Clubs } ]
+        ]
+      in
+      let deck = [ { Card.rank = Rank.Two; suit = Suit.Diamonds } ] in
+      let discard_pile = [] in
+      let decision =
+        Decision.In_progress { whose_turn = Player_kind.P1; declared_suit = None }
+      in
+      { hands; deck; discard_pile; decision }
+    ;;
+
+    let empty_deck_state = { sample_state with deck = [] }
   end
 end
