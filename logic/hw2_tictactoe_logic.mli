@@ -98,6 +98,7 @@ module Game_state : sig
   val get_all_valid_moves : t -> Move.t list
   val make_move : t -> Move.t -> (t, Move_error.t) Result.t
   val top_discard : t -> Card.t option
+  val create_random_initial_state : ?hand_size:int -> unit -> t
 
   module For_testing : sig
     val sample_state : t
