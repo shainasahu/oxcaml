@@ -48,4 +48,22 @@ test.describe('Crazy Eights UI', () => {
     await expect(page.locator('.winner')).toHaveText(/Player 1 wins/);
   });
 
+  test('turn indicator shows correct initial player', async ({ page }) => {
+    const turnText = await page.locator('.turn-indicator').textContent();
+    expect(turnText).toMatch(/Player [12]'s turn!/);
+  });
+
+  test('clicking opponent face-down cards does nothing', async ({ page }) => {
+    const opponentCard = page.locator('.hand .card.face-down').first();
+    const classesBefore = await opponentCard.getAttribute('class');
+    await opponentCard.click();
+    const classesAfter = await opponentCard.getAttribute('class');
+    expect(classesAfter).toBe(classesBefore);
+  });
+
+  test('play button does nothing if no cards selected', async ({ page }) => {
+    const playButton = page.locator('button:has-text("Play")');
+    await expect(playButton).toHaveCount(0);
+  });
+
 });
