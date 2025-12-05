@@ -24,36 +24,42 @@ end
 let initial_draw_state = Draw_state.No_draw
 
 let render_card ~card ~clickable ~on_click ~is_selected ~player =
-  let card_content, is_face_down =
+  let img_src =
     match card with
-    | `Face_down -> ("", true)
-    | `Card card_obj -> 
-        let rank_str =
-          match card_obj.Card.rank with
-          | Rank.Two -> "2" | Rank.Three -> "3" | Rank.Four -> "4" | Rank.Five -> "5"
-          | Rank.Six -> "6" | Rank.Seven -> "7" | Rank.Eight -> "8" | Rank.Nine -> "9"
-          | Rank.Ten -> "10" | Rank.Jack -> "J" | Rank.Queen -> "Q" | Rank.King -> "K" | Rank.Ace -> "A"
-        in
-        let suit_str =
-          match card_obj.Card.suit with
-          | Suit.Hearts -> "♥" | Suit.Diamonds -> "♦" | Suit.Clubs -> "♣" | Suit.Spades -> "♠"
-        in
-        (rank_str ^ suit_str, false)
+    | `Face_down ->
+      "hw5_html_css/cards/1B.svg"
+    | `Card card_obj ->
+      let rank =
+        match card_obj.Card.rank with
+        | Rank.Two -> "2" | Rank.Three -> "3" | Rank.Four -> "4" | Rank.Five -> "5"
+        | Rank.Six -> "6" | Rank.Seven -> "7" | Rank.Eight -> "8" | Rank.Nine -> "9"
+        | Rank.Ten -> "T" | Rank.Jack -> "J" | Rank.Queen -> "Q" | Rank.King -> "K" | Rank.Ace -> "A"
+      in
+      let suit =
+        match card_obj.Card.suit with
+        | Suit.Hearts -> "H" | Suit.Diamonds -> "D" | Suit.Clubs -> "C" | Suit.Spades -> "S"
+      in
+      "hw5_html_css/cards/" ^ rank ^ suit ^ ".svg"
   in
+
   let player_class =
     match player with
     | Player_kind.P1 -> "player1-card"
     | Player_kind.P2 -> "player2-card"
   in
+
   let attrs =
-    let base = [ Vdom.Attr.class_ "card"; Vdom.Attr.class_ player_class ] in
-    let base = if is_face_down then base @ [ Vdom.Attr.class_ "face-down" ] else base in
+    let base = [
+      Vdom.Attr.class_ "card";
+      Vdom.Attr.class_ player_class;
+    ] in
     let base = if is_selected then base @ [ Vdom.Attr.class_ "selected" ] else base in
     if clickable
     then base @ [ Vdom.Attr.on_click (fun _ -> on_click card) ]
     else base
   in
-  Vdom.Node.div ~attrs [ Vdom.Node.text card_content ]
+
+  Vdom.Node.img ~attrs:(attrs @ [ Vdom.Attr.src img_src ]) ()
 ;;
 
 let render_hand ~cards ~on_card_click ~selected_cards ~player =
@@ -68,28 +74,38 @@ let render_hand ~cards ~on_card_click ~selected_cards ~player =
 ;;
 
 let render_piles ~deck ~discard ~on_draw =
-  Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "piles" ]
-    [ Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "deck"; Vdom.Attr.on_click (fun _ -> on_draw ()) ]
-        [ Vdom.Node.text (if List.is_empty deck then "EMPTY" else "DRAW") ];
-      Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "discard" ]
-        [ Vdom.Node.text
-            (match List.hd discard with
-            | None -> "EMPTY"
-            | Some ({ Card.rank; suit } : Card.t) ->
-              let rank_str =
-                match rank with
-                | Rank.Two -> "2" | Rank.Three -> "3" | Rank.Four -> "4" | Rank.Five -> "5"
-                | Rank.Six -> "6" | Rank.Seven -> "7" | Rank.Eight -> "8" | Rank.Nine -> "9"
-                | Rank.Ten -> "10" | Rank.Jack -> "J" | Rank.Queen -> "Q" | Rank.King -> "K" | Rank.Ace -> "A"
-              in
-              let suit_str =
-                match suit with
-                | Suit.Hearts -> "♥" | Suit.Diamonds -> "♦" | Suit.Clubs -> "♣" | Suit.Spades -> "♠"
-              in
-              rank_str ^ suit_str) ] ]
+  let deck_img =
+    if List.is_empty deck then
+      Vdom.Node.img ~attrs:[ Vdom.Attr.src "hw5_html_css/cards/1B.svg"; Vdom.Attr.class_ "pile" ] ()
+    else
+      Vdom.Node.img
+        ~attrs:[
+          Vdom.Attr.src "hw5_html_css/cards/1B.svg";
+          Vdom.Attr.class_ "pile";
+          Vdom.Attr.on_click (fun _ -> on_draw ())
+        ] ()
+  in
+  let discard_img =
+    match List.hd discard with
+    | None -> 
+      Vdom.Node.img ~attrs:[ Vdom.Attr.src "hw5_html_css/cards/1B.svg"; Vdom.Attr.class_ "pile" ] ()
+    | Some card ->
+      let rank =
+        match card.Card.rank with
+        | Rank.Two -> "2" | Rank.Three -> "3" | Rank.Four -> "4" | Rank.Five -> "5"
+        | Rank.Six -> "6" | Rank.Seven -> "7" | Rank.Eight -> "8" | Rank.Nine -> "9"
+        | Rank.Ten -> "T" | Rank.Jack -> "J" | Rank.Queen -> "Q" | Rank.King -> "K" | Rank.Ace -> "A"
+      in
+      let suit =
+        match card.Card.suit with
+        | Suit.Hearts -> "H" | Suit.Diamonds -> "D" | Suit.Clubs -> "C" | Suit.Spades -> "S"
+      in
+      let img_src = "hw5_html_css/cards/" ^ rank ^ suit ^ ".svg" in
+      Vdom.Node.img ~attrs:[ Vdom.Attr.src img_src; Vdom.Attr.class_ "pile" ] ()
+  in
+  Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "piles" ] [ deck_img; discard_img ]
 ;;
+   
 
 let render_turn ~decision =
   match decision with
@@ -100,7 +116,7 @@ let render_turn ~decision =
   | Decision.In_progress { whose_turn; _ } ->
     let player_num = match whose_turn with Player_kind.P1 -> 1 | Player_kind.P2 -> 2 in
     Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "turn-indicator" ]
-      [ Vdom.Node.text (Printf.sprintf "Player %d's turn!" player_num) ]
+      [ Vdom.Node.text (Printf.sprintf "Player %d's turn" player_num) ]
 ;;
 
 let crazy_eights_board 
@@ -110,18 +126,27 @@ let crazy_eights_board
   ~set_selected_cards
   ~draw_state
   ~set_draw_state
+  ~message
+  ~set_message
   =
-  
+
   let on_card_click card =
     match draw_state with
     | Draw_state.Just_drawn _ -> Vdom.Effect.Ignore
     | Draw_state.No_draw ->
       match card with
-      | `Face_down -> Vdom.Effect.Ignore
+      | `Face_down -> set_message "Can't play opponent's card!"
       | `Card card_obj ->
-        if List.mem selected_cards card_obj ~equal:Card.equal
-        then set_selected_cards (List.filter selected_cards ~f:(fun c -> not (Card.equal c card_obj)))
-        else set_selected_cards (card_obj :: selected_cards)
+        if List.mem selected_cards card_obj ~equal:Card.equal then
+          Vdom.Effect.Many [
+            set_message "";
+            set_selected_cards []
+          ]
+        else
+          Vdom.Effect.Many [
+            set_message "";
+            set_selected_cards [ card_obj ]
+          ]
   in
   
   let on_play_selected () =
@@ -134,9 +159,10 @@ let crazy_eights_board
           Vdom.Effect.Many [
             set_game_state new_state;
             set_selected_cards [];
-            set_draw_state Draw_state.No_draw
+            set_draw_state Draw_state.No_draw;
+            set_message ""
           ]
-        | Core.Result.Error _ -> Vdom.Effect.Ignore
+        | Core.Result.Error _ -> set_message "Can't play that card: it doesn't match the rank or suit!"
       else
         Vdom.Effect.Ignore
   in
@@ -145,13 +171,18 @@ let crazy_eights_board
     match draw_state with
     | Draw_state.Just_drawn _ -> Vdom.Effect.Ignore
     | Draw_state.No_draw ->
-      match Game_state.make_move game_state (Move.Draw_and_maybe_play None) with
+      if List.is_empty game_state.deck then
+        set_message "Deck is empty!"
+      else
+        match Game_state.make_move game_state (Move.Draw_and_maybe_play None) with
       | Core.Result.Ok new_state ->
         Vdom.Effect.Many [
           set_game_state new_state;
-          set_draw_state Draw_state.No_draw
+          set_draw_state Draw_state.No_draw;
+          set_message ""
         ]
-      | Core.Result.Error _ -> Vdom.Effect.Ignore
+      | Core.Result.Error _ -> 
+        set_message "Can't draw, you have playable cards!"
   in
 
   let current_player =
@@ -184,7 +215,7 @@ let crazy_eights_board
       if not (List.is_empty selected_cards) then
         Vdom.Node.button
           ~attrs:[ Vdom.Attr.on_click (fun _ -> on_play_selected ()) ]
-          [ Vdom.Node.text (Printf.sprintf "Play %d cards" (List.length selected_cards)) ]
+          [ Vdom.Node.text (Printf.sprintf "Play Chosen Card") ]
       else
         Vdom.Node.none
   in
@@ -192,14 +223,23 @@ let crazy_eights_board
   let deck = game_state.deck in
   let discard = game_state.discard_pile in
 
+  let message_node =
+    if String.is_empty message then Vdom.Node.none
+    else
+      Vdom.Node.div
+        ~attrs:[ Vdom.Attr.class_ "message" ]
+        [ Vdom.Node.text message ]
+  in
+
   Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "game" ]
-    (Vdom.Node.text "Crazy Eights!" ::
+    (Vdom.Node.text "Crazy Eights" ::
       (List.concat [ 
         opponent_hands;
         [ render_piles ~deck ~discard ~on_draw ];
         [ drawn_card_ui ];
         [ current_hand ];
         [ play_button ];
+        [ message_node ];
         [ render_turn ~decision:game_state.decision ] 
       ])
     )
@@ -216,16 +256,22 @@ let app =
   let%sub draw_state, set_draw_state = 
     Bonsai.state ~default_model:initial_draw_state (module Draw_state)
   in
+  let%sub message, set_message =  (* Move this here *)
+    Bonsai.state (module String) ~default_model:""
+  in
   let%arr game_state = game_state
   and set_game_state = set_game_state
   and selected_cards = selected_cards
   and set_selected_cards = set_selected_cards
   and draw_state = draw_state
-  and set_draw_state = set_draw_state in
+  and set_draw_state = set_draw_state
+  and message = message
+  and set_message = set_message in
   crazy_eights_board 
     ~game_state ~set_game_state 
     ~selected_cards ~set_selected_cards
     ~draw_state ~set_draw_state
+    ~message ~set_message
 ;;
 
 let () = Bonsai_web.Start.start app

@@ -19,6 +19,8 @@ body {
   justify-content: space-around;
   align-items: center;
   font-family: sans-serif;
+  font-weight: bold;
+  font-size: 20px;
 }
 
 .row {
@@ -44,10 +46,11 @@ body {
 }
 
 .card {
-  width: 50px;
-  height: 70px;
+  width: 100px;
+  height: auto;
+  margin: 4px;
   border: 1px solid black;
-  border-radius: 5px;
+  border-radius: 8px;
   background-color: white;
   display: flex;
   justify-content: center;
@@ -69,16 +72,32 @@ body {
   margin: 2vh 0;
 }
 
-.deck, .discard {
-  width: 60px;
-  height: 80px;
+.pile {
+  width: 100px;
+  height: auto;
+  margin: 4px;
   border: 1px solid black;
-  border-radius: 5px;
+  border-radius: 8px;
+  background-color: white;
   display: flex;
   justify-content: center;
   align-items: center;
   font-weight: bold;
+  font-size: 16px;
 }
+
+.deck, .discard {
+  width: 100px;
+  height: auto;
+  border: 1px solid black;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 16px;
+}
+  
 
 /* the messages */
 .turn-indicator {
@@ -89,15 +108,15 @@ body {
 }
 
 .player1-card {
-  border: 2px solid red !important;
+  border: 2px solid black !important;
 }
 
 .player2-card {
-  border: 2px solid blue !important;
+  border: 2px solid gray !important;
 }
 
 .card.selected {
-  border: 3px solid darkgreen !important;
+  border: 5px solid darkgreen !important;
   background-color: rgb(217, 233, 238);
 }
 
@@ -118,5 +137,12 @@ body {
   font-size: 1.5rem;
   font-weight: bold;
   color: green;
+  text-align: center;
+}
+
+.message {
+  color: red;
+  font-weight: bold;
+  margin-top: 1rem;
   text-align: center;
 }
