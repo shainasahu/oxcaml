@@ -50,10 +50,10 @@ let render_card ~card ~clickable ~on_click ~is_selected ~player =
 
   let attrs =
     let base = [
-      Vdom.Attr.class_ "card";
+      Vdom.Attr.class_ "player-card hoverable z-depth-2";
       Vdom.Attr.class_ player_class;
     ] in
-    let base = if is_selected then base @ [ Vdom.Attr.class_ "selected" ] else base in
+    let base = if is_selected then base @ [ Vdom.Attr.class_ "selected gray lighten-4" ] else base in
     if clickable
     then base @ [ Vdom.Attr.on_click (fun _ -> on_click card) ]
     else base
@@ -74,21 +74,30 @@ let render_hand ~cards ~on_card_click ~selected_cards ~player =
 ;;
 
 let render_piles ~deck ~discard ~on_draw =
+  let make_pile img_src clickable =
+    let attrs = [
+      Vdom.Attr.class_ "player-card hoverable z-depth-2 pile";
+      Vdom.Attr.src img_src;
+    ] in
+    let attrs = if clickable then
+      attrs @ [ Vdom.Attr.on_click (fun _ -> on_draw ()) ]
+    else attrs
+    in
+    Vdom.Node.img ~attrs ()
+  in
+
+  (* Deck pile *)
   let deck_img =
     if List.is_empty deck then
-      Vdom.Node.img ~attrs:[ Vdom.Attr.src "hw5_html_css/cards/1B.svg"; Vdom.Attr.class_ "pile" ] ()
+      make_pile "hw5_html_css/cards/1B.svg" false
     else
-      Vdom.Node.img
-        ~attrs:[
-          Vdom.Attr.src "hw5_html_css/cards/1B.svg";
-          Vdom.Attr.class_ "pile";
-          Vdom.Attr.on_click (fun _ -> on_draw ())
-        ] ()
+      make_pile "hw5_html_css/cards/1B.svg" true
   in
+
+  (* Discard pile *)
   let discard_img =
     match List.hd discard with
-    | None -> 
-      Vdom.Node.img ~attrs:[ Vdom.Attr.src "hw5_html_css/cards/1B.svg"; Vdom.Attr.class_ "pile" ] ()
+    | None -> make_pile "hw5_html_css/cards/1B.svg" false
     | Some card ->
       let rank =
         match card.Card.rank with
@@ -101,22 +110,22 @@ let render_piles ~deck ~discard ~on_draw =
         | Suit.Hearts -> "H" | Suit.Diamonds -> "D" | Suit.Clubs -> "C" | Suit.Spades -> "S"
       in
       let img_src = "hw5_html_css/cards/" ^ rank ^ suit ^ ".svg" in
-      Vdom.Node.img ~attrs:[ Vdom.Attr.src img_src; Vdom.Attr.class_ "pile" ] ()
+      make_pile img_src false
   in
+
   Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "piles" ] [ deck_img; discard_img ]
 ;;
-   
 
 let render_turn ~decision =
   match decision with
   | Decision.Winner winner -> 
     let player_num = match winner with Player_kind.P1 -> 1 | Player_kind.P2 -> 2 in
-    Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "winner" ] 
-      [ Vdom.Node.text (Printf.sprintf "Player %d wins the game!" player_num) ]
+    Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "turn-display" ]
+      [ Vdom.Node.text (Printf.sprintf "Player %d Wins!" player_num) ]
   | Decision.In_progress { whose_turn; _ } ->
     let player_num = match whose_turn with Player_kind.P1 -> 1 | Player_kind.P2 -> 2 in
-    Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "turn-indicator" ]
-      [ Vdom.Node.text (Printf.sprintf "Player %d's turn" player_num) ]
+    Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "turn-display" ]
+      [ Vdom.Node.text (Printf.sprintf "Player %d's Turn" player_num) ]
 ;;
 
 let crazy_eights_board 
@@ -206,16 +215,17 @@ let crazy_eights_board
     render_hand ~cards:hand_as_variant ~on_card_click ~selected_cards ~player:current_player
   in
 
-  let drawn_card_ui = Vdom.Node.none in
-
   let play_button =
     match draw_state with
     | Draw_state.Just_drawn _ -> Vdom.Node.none
     | Draw_state.No_draw ->
       if not (List.is_empty selected_cards) then
         Vdom.Node.button
-          ~attrs:[ Vdom.Attr.on_click (fun _ -> on_play_selected ()) ]
-          [ Vdom.Node.text (Printf.sprintf "Play Chosen Card") ]
+          ~attrs:[ 
+            Vdom.Attr.class_ "btn grey"
+            ; Vdom.Attr.on_click (fun _ -> on_play_selected ()) 
+          ]
+          [ Vdom.Node.text "Play Chosen Card" ]
       else
         Vdom.Node.none
   in
@@ -223,26 +233,54 @@ let crazy_eights_board
   let deck = game_state.deck in
   let discard = game_state.discard_pile in
 
+  let rules_section =
+    Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "rules-box" ]
+      [ Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "rules-title" ]
+          [ Vdom.Node.text "Game Rules" ];
+        Vdom.Node.create "p" ~attrs:[]
+          [ Vdom.Node.text "• Match rank OR suit of top card" ];
+        Vdom.Node.create "p" ~attrs:[]
+          [ Vdom.Node.text "• Eights are wild (playable on any suit)" ];
+        Vdom.Node.create "p" ~attrs:[]
+          [ Vdom.Node.text "• Draw if you can't play" ];
+        Vdom.Node.create "p" ~attrs:[]
+          [ Vdom.Node.text "• First to empty hand wins!" ] ]
+  in
+
   let message_node =
     if String.is_empty message then Vdom.Node.none
     else
       Vdom.Node.div
-        ~attrs:[ Vdom.Attr.class_ "message" ]
+        ~attrs:[ Vdom.Attr.class_ "toast-message" ]
         [ Vdom.Node.text message ]
   in
 
-  Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "game" ]
-    (Vdom.Node.text "Crazy Eights" ::
+  let game_content =
+    Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "game" ]
       (List.concat [ 
         opponent_hands;
         [ render_piles ~deck ~discard ~on_draw ];
-        [ drawn_card_ui ];
         [ current_hand ];
-        [ play_button ];
-        [ message_node ];
-        [ render_turn ~decision:game_state.decision ] 
+        [ play_button ]; 
       ])
-    )
+  in
+
+  let game_with_message =
+    Vdom.Node.div ~attrs:[]
+      [ game_content; 
+        message_node ]
+  in
+
+  Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "main-container" ]
+    [ Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "sidebar" ]
+        [ Vdom.Node.h1 
+            ~attrs:[ Vdom.Attr.class_ "gothic-title" ]
+            [ Vdom.Node.text "Crazy Eights" ];
+          rules_section; 
+          render_turn ~decision:game_state.decision ];
+      Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "game-container" ]
+        [ game_with_message ] ]
+
 ;;
 
 let app =

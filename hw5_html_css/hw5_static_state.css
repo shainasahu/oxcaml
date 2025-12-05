@@ -10,33 +10,47 @@ body {
   align-items: center;
 }
 
-.game {
-  width: min(100vw, 100vh);
-  height: min(100vw, 100vh);
-  position: relative;
+.main-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 400px;
+  background: rgba(2, 36, 19, 0.7);
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
   align-items: center;
-  font-family: sans-serif;
-  font-weight: bold;
-  font-size: 20px;
+  padding-bottom: 40px;
 }
 
-.row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  flex: 1;
+.turn-display {
+  margin-top: auto; /* Push to bottom */
+  padding: 20px;
+  color: #d5d5d5;
+  flex-shrink: 0;
+  font-size:x-large;
 }
 
-.column {
+.game-container {
   flex: 1;
-  margin: 0 2%;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  height: 100vh;
+  background: linear-gradient(-49deg, #095e25, #033617, #056d24, #0c3b14, #095e25, #033617, #056d24, #0c3b14);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+.game {
+  width: min(80vh, 80vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
 .hand {
@@ -45,66 +59,23 @@ body {
   gap: 1vw;
 }
 
-.card {
-  width: 100px;
+.player-card {
+  width: 130px;
   height: auto;
   margin: 4px;
   border: 1px solid black;
   border-radius: 8px;
+  gap: 15px;
   background-color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: bold;
-  font-size: 16px;
+  object-fit: contain;
 }
 
-.face-down {
-  background-color: gray;
-}
-
-/* deck and discard pile */
 .piles {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 2vw;
   margin: 2vh 0;
-}
-
-.pile {
-  width: 100px;
-  height: auto;
-  margin: 4px;
-  border: 1px solid black;
-  border-radius: 8px;
-  background-color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: bold;
-  font-size: 16px;
-}
-
-.deck, .discard {
-  width: 100px;
-  height: auto;
-  border: 1px solid black;
-  border-radius: 8px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: bold;
-  font-size: 16px;
-}
-  
-
-/* the messages */
-.turn-indicator {
-  margin-top: 1vh;
-  font-size: 1.2rem;
-  font-weight: bold;
-  text-align: center;
 }
 
 .player1-card {
@@ -115,22 +86,9 @@ body {
   border: 2px solid gray !important;
 }
 
-.card.selected {
-  border: 5px solid darkgreen !important;
+.player-card.selected {
+  border: 5px solid yellowgreen !important;
   background-color: rgb(217, 233, 238);
-}
-
-.drawn-card-prompt {
-  text-align: center;
-  margin: 10px 0;
-}
-
-.drawn-buttons {
-  margin-top: 10px;
-}
-
-.drawn-buttons button {
-  margin: 0 5px;
 }
 
 .winner {
@@ -141,8 +99,73 @@ body {
 }
 
 .message {
-  color: red;
+  color: black;
   font-weight: bold;
   margin-top: 1rem;
   text-align: center;
+}
+
+.gothic-title {
+  /* font-family: 'UnifrakturMaguntia', cursive !important; */
+  font-size: 60px !important;
+  color: #d5d5d5 !important;
+  padding: 5px;
+  text-align: center;
+}
+
+.rules-box {
+  background: rgba(0, 0, 0, 0.3);
+  color: white;
+  padding: 15px;
+  margin: 0 20px 20px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: sans-serif;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.rules-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #d5d5d5;
+  font-size: 2rem;
+}
+
+.toast-message {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: grey !important;
+  color: white !important;
+  padding: 16px 24px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 1000;
+  animation: fadeInOut 4s ease forwards;
+}
+
+@keyframes fadeInOut {
+  0% { 
+    opacity: 0; 
+    transform: translateY(20px);
+  }
+  15% { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
+  85% { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+  100% { 
+    opacity: 0; 
+    transform: translateY(20px);
+  }
+}
+
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
