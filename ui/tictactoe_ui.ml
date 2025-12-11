@@ -137,6 +137,10 @@ let crazy_eights_board
   ~set_draw_state
   ~message
   ~set_message
+  ~player_id
+  ~room_id
+  ~set_room_id
+  ~generated_room_id
   =
 
   let on_card_click card =
@@ -276,10 +280,69 @@ let crazy_eights_board
         [ Vdom.Node.h1 
             ~attrs:[ Vdom.Attr.class_ "gothic-title" ]
             [ Vdom.Node.text "Crazy Eights" ];
-          rules_section; 
-          render_turn ~decision:game_state.decision ];
+          
+          rules_section;
+          
+          Vdom.Node.div
+            ~attrs:[ Vdom.Attr.class_ "room-box" ]
+            [
+              Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "room-title" ]
+                [ Vdom.Node.text "Default is 'Pass and Play'. To play with others:" ];
+              
+              Vdom.Node.div ~attrs:[]
+                [ Vdom.Node.text "Join existing room or create new room." ];
+          
+              Vdom.Node.input
+                ~attrs:[
+                  Vdom.Attr.class_ "room-input";
+                  Vdom.Attr.type_ "text";
+                  Vdom.Attr.value room_id;
+                  Vdom.Attr.placeholder "Enter room ID to join";
+                  Vdom.Attr.on_input (fun _ v -> set_room_id v);
+                ]
+                ();
+              
+              Vdom.Node.button
+                ~attrs:[
+                  Vdom.Attr.class_ "btn grey";
+                  Vdom.Attr.on_click (fun _ -> set_message ("Joined room " ^ room_id))
+                ]
+                [ Vdom.Node.text "Join Room" ];
+              
+              Vdom.Node.input
+                ~attrs:[
+                  Vdom.Attr.class_ "room-input";
+                  Vdom.Attr.type_ "text";
+                  Vdom.Attr.value generated_room_id;
+                ]
+                ();
+              
+              Vdom.Node.button
+                ~attrs:[
+                  Vdom.Attr.class_ "btn grey";
+                  Vdom.Attr.on_click (fun _ ->
+                    Vdom.Effect.Many [
+                      set_room_id generated_room_id;
+                      set_message ("Created and joined room " ^ generated_room_id)
+                    ])
+                ]
+                [ Vdom.Node.text "Create Room" ];  
+              
+              Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "player-id-box" ]
+                [ Vdom.Node.text ("Your Player ID: " ^ player_id) ];
+              
+              Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "room-id-box" ]
+                [ Vdom.Node.text ("Your Current Room ID: " ^ 
+                  (if String.is_empty room_id then "None" else room_id)) ];
+            ];
+ 
+          ];
+
       Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "game-container" ]
-        [ game_with_message ] ]
+        [ 
+          render_turn ~decision:game_state.decision;
+          game_with_message 
+        ] ]
 
 ;;
 
@@ -294,9 +357,17 @@ let app =
   let%sub draw_state, set_draw_state = 
     Bonsai.state ~default_model:initial_draw_state (module Draw_state)
   in
-  let%sub message, set_message =  (* Move this here *)
+  let%sub message, set_message = 
     Bonsai.state (module String) ~default_model:""
   in
+
+  let%sub player_id = Bonsai.const (Random.bits () |> Int.to_string) in
+  let%sub room_id, set_room_id = Bonsai.state (module String) ~default_model:"" in
+
+  let%sub generated_room_id = 
+    Bonsai.const (Random.int 9000 + 1000 |> string_of_int)
+  in
+
   let%arr game_state = game_state
   and set_game_state = set_game_state
   and selected_cards = selected_cards
@@ -304,12 +375,20 @@ let app =
   and draw_state = draw_state
   and set_draw_state = set_draw_state
   and message = message
-  and set_message = set_message in
+  and set_message = set_message
+  and player_id = player_id
+  and room_id = room_id
+  and set_room_id = set_room_id
+  and generated_room_id = generated_room_id
+  in
   crazy_eights_board 
     ~game_state ~set_game_state 
     ~selected_cards ~set_selected_cards
     ~draw_state ~set_draw_state
     ~message ~set_message
+    ~player_id
+    ~room_id ~set_room_id
+    ~generated_room_id
 ;;
 
 let () = Bonsai_web.Start.start app
