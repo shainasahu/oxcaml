@@ -577,6 +577,12 @@ let crazy_eights_board
               
               Vdom.Node.div ~attrs:[]
                 [ Vdom.Node.text "Join existing room or create new room." ];
+              
+              Vdom.Node.div ~attrs:[]
+                [ Vdom.Node.text "Player 1 should only click \"Create Room\". Send Room ID to Player 2." ];
+              
+              Vdom.Node.div ~attrs:[]
+                [ Vdom.Node.text "Player 2 should enter same Room ID and only click \"Join Room\". Then start playing!" ];
           
               Vdom.Node.input
                 ~attrs:[
