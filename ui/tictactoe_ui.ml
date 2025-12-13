@@ -53,7 +53,6 @@ module Multiplayer = struct
 
   let game_state_of_json (json : string) : Game_state.t =
     try
-      (* Extract the data field from JSON *)
       let pattern = Str.regexp "\"data\":\"\\(\\(.\\|\n\\)*\\)\"" in
       let _ = Str.search_forward pattern json 0 in
       let escaped_data = Str.matched_group 1 json in
@@ -61,7 +60,6 @@ module Multiplayer = struct
       sexp_string |> Sexp.of_string |> Game_state.t_of_sexp
     with _ -> failwith "Failed to parse JSON"
 
-  (* Create a new room *)
   let create_room ~(room_id : string) ~(player_id : string) : document_fetch Deferred.t =
     let initial_state = Game_state.create_random_initial_state () in
     let (_player_id : string) = player_id in
@@ -84,7 +82,6 @@ module Multiplayer = struct
     ignore (xhr##send (Js.some (Js.string body)));
     Ivar.read ivar
 
-  (* Join an existing room *)
   let join_room ~(room_id : string) ~(player_id : string) : document_fetch Deferred.t =
     let url = firebase_base_url ^ "/rooms/" ^ room_id ^ ".json" in
     let (_player_id : string) = player_id in
@@ -110,7 +107,6 @@ module Multiplayer = struct
     ignore (xhr##send Js.null);
     Ivar.read ivar
 
-  (* Send move (update game state) *)
   let send_move ~(room_id : string) ~(player_id : string) (new_state : Game_state.t) : document_fetch Deferred.t =
     let url = firebase_base_url ^ "/rooms/" ^ room_id ^ ".json" in
     let (_player_id : string) = player_id in
@@ -236,7 +232,6 @@ let render_piles ~deck ~discard ~on_draw =
     Vdom.Node.img ~attrs ()
   in
 
-  (* Deck pile *)
   let deck_img =
     if List.is_empty deck then
       make_pile "hw5_html_css/cards/1B.svg" false
@@ -244,7 +239,6 @@ let render_piles ~deck ~discard ~on_draw =
       make_pile "hw5_html_css/cards/1B.svg" true
   in
 
-  (* Discard pile *)
   let discard_img =
     match List.hd discard with
     | None -> make_pile "hw5_html_css/cards/1B.svg" false
@@ -472,7 +466,6 @@ let crazy_eights_board
       (opponent_hands, current_hand)
 
     else
-      (* Pass and Play *)
       let opponent_hands =
         List.filter_map game_state.hands ~f:(fun (player, hand) ->
             if Player_kind.equal player current_player
@@ -530,7 +523,9 @@ let crazy_eights_board
 
   let rules_section =
     Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "rules-box" ]
-      [ Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "rules-title" ]
+      [ Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "note-phone" ]
+          [ Vdom.Node.text "Note: If playing on phone, please scroll right and down." ];
+        Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "rules-title" ]
           [ Vdom.Node.text "Game Rules" ];
         Vdom.Node.create "p" ~attrs:[]
           [ Vdom.Node.text "• Match rank OR suit of top card" ];
@@ -654,6 +649,8 @@ let crazy_eights_board
 
       Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "game-container" ]
         [ 
+          Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "game-mode-label" ]
+            [ Vdom.Node.text (if is_multiplayer then "Now Playing: Multiplayer" else "Now Playing: Pass and Play") ];
           render_turn ~decision:game_state.decision;
           game_with_message 
         ] ]
