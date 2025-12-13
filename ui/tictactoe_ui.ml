@@ -637,9 +637,6 @@ let crazy_eights_board
                 ]
                 [ Vdom.Node.text "Create Room" ];  
               
-              Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "player-id-box" ]
-                [ Vdom.Node.text ("Your Player ID: " ^ player_id) ];
-              
               Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "room-id-box" ]
                 [ Vdom.Node.text ("Your Current Room ID: " ^ 
                   (if String.is_empty room_id then "None" else room_id)) ];
