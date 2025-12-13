@@ -4,7 +4,7 @@ module Player_kind = struct
   type t =
     | P1
     | P2
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 
   let opposite (t : t) : t =
     match t with
@@ -19,7 +19,7 @@ module Suit = struct
     | Diamonds
     | Clubs
     | Spades
-  [@@deriving sexp, compare, equal, enumerate]
+  [@@deriving sexp, compare, equal, enumerate, yojson]
 end
 
 module Rank = struct
@@ -37,7 +37,7 @@ module Rank = struct
     | Queen
     | King
     | Ace
-  [@@deriving sexp, compare, equal, enumerate]
+  [@@deriving sexp, compare, equal, enumerate, yojson]
 end
 
 module Card = struct
@@ -45,7 +45,7 @@ module Card = struct
     { rank : Rank.t
     ; suit : Suit.t
     }
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 end
 
 module Decision = struct
@@ -55,7 +55,7 @@ module Decision = struct
         ; declared_suit : Suit.t option
         }
     | Winner of Player_kind.t
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 
   let is_game_over t =
     match t with
@@ -68,7 +68,7 @@ module Move = struct
   type t =
     | Play of Card.t list
     | Draw_and_maybe_play of Card.t option
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 end
 
 module Game_state = struct
@@ -78,7 +78,7 @@ module Game_state = struct
     ; deck : Card.t list
     ; decision : Decision.t
     }
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 
   module Create_error = struct
     type t = Invalid_initial_setup [@@deriving sexp, compare]

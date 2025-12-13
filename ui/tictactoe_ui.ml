@@ -2,9 +2,159 @@ open! Core
 open Tictactoe_logic_library
 open Hw2_tictactoe_logic
 open Virtual_dom
+open Js_of_ocaml
+open Async_kernel
 open! Bonsai.Let_syntax
 
 let () = Random.self_init ()
+
+module Multiplayer = struct
+  type document_fetch = Game_state.t
+
+  let firebase_base_url = "https://crazy-eights-85663-default-rtdb.firebaseio.com"
+
+  let escape_for_json str =
+    let buf = Buffer.create (String.length str) in
+    String.iter str ~f:(fun c ->
+      match c with
+      | '"' -> Buffer.add_string buf "\\\""
+      | '\\' -> Buffer.add_string buf "\\\\"
+      | '\n' -> Buffer.add_string buf "\\n"
+      | '\r' -> Buffer.add_string buf "\\r"
+      | '\t' -> Buffer.add_string buf "\\t"
+      | c -> Buffer.add_char buf c
+    );
+    Buffer.contents buf
+
+  let unescape_from_json str =
+    let len = String.length str in
+    let buf = Buffer.create len in
+    let rec aux i =
+      if i >= len then ()
+      else
+        match str.[i] with
+        | '\\' when i + 1 < len -> (
+          match str.[i + 1] with
+          | '"' -> Buffer.add_char buf '"'; aux (i + 2)
+          | '\\' -> Buffer.add_char buf '\\'; aux (i + 2)
+          | 'n' -> Buffer.add_char buf '\n'; aux (i + 2)
+          | 'r' -> Buffer.add_char buf '\r'; aux (i + 2)
+          | 't' -> Buffer.add_char buf '\t'; aux (i + 2)
+          | _ -> Buffer.add_char buf str.[i]; aux (i + 1)
+        )
+        | c -> Buffer.add_char buf c; aux (i + 1)
+    in
+    aux 0;
+    Buffer.contents buf
+
+  let game_state_to_json (state : Game_state.t) : string =
+    let sexp_string = state |> Game_state.sexp_of_t |> Sexp.to_string in
+    "{\"data\":\"" ^ (escape_for_json sexp_string) ^ "\"}"
+
+  let game_state_of_json (json : string) : Game_state.t =
+    try
+      (* Extract the data field from JSON *)
+      let pattern = Str.regexp "\"data\":\"\\(\\(.\\|\n\\)*\\)\"" in
+      let _ = Str.search_forward pattern json 0 in
+      let escaped_data = Str.matched_group 1 json in
+      let sexp_string = unescape_from_json escaped_data in
+      sexp_string |> Sexp.of_string |> Game_state.t_of_sexp
+    with _ -> failwith "Failed to parse JSON"
+
+  (* Create a new room *)
+  let create_room ~(room_id : string) ~(player_id : string) : document_fetch Deferred.t =
+    let initial_state = Game_state.create_random_initial_state () in
+    let (_player_id : string) = player_id in
+    let body = game_state_to_json initial_state in
+    let url = firebase_base_url ^ "/rooms/" ^ room_id ^ ".json" in
+    let ivar = Ivar.create () in
+    let xhr = XmlHttpRequest.create () in
+    xhr##_open (Js.string "PUT") (Js.string url) Js._true;
+    xhr##setRequestHeader (Js.string "Content-Type") (Js.string "application/json");
+    xhr##.onreadystatechange := Js.wrap_callback (fun _ ->
+      match xhr##.readyState with
+      | XmlHttpRequest.DONE ->
+        let status = xhr##.status in
+        if status >= 200 && status < 300 then
+          Ivar.fill ivar initial_state
+        else
+          Ivar.fill ivar (failwith (Printf.sprintf "Failed to create room: %d" status))
+      | _ -> ()
+    );
+    ignore (xhr##send (Js.some (Js.string body)));
+    Ivar.read ivar
+
+  (* Join an existing room *)
+  let join_room ~(room_id : string) ~(player_id : string) : document_fetch Deferred.t =
+    let url = firebase_base_url ^ "/rooms/" ^ room_id ^ ".json" in
+    let (_player_id : string) = player_id in
+    let ivar = Ivar.create () in
+    let xhr = XmlHttpRequest.create () in
+    xhr##_open (Js.string "GET") (Js.string url) Js._true;
+    xhr##.onreadystatechange := Js.wrap_callback (fun _ ->
+      match xhr##.readyState with
+      | XmlHttpRequest.DONE ->
+        let status = xhr##.status in
+        if status >= 200 && status < 300 then (
+          let response_text =
+            Js.Opt.get xhr##.responseText (fun () -> Js.string "{}") |> Js.to_string
+          in
+          let state = game_state_of_json response_text in
+          Ivar.fill ivar state
+        ) else if status = 404 then
+          Ivar.fill ivar (failwith "Room not found")
+        else
+          Ivar.fill ivar (failwith (Printf.sprintf "Failed to join room: %d" status))
+      | _ -> ()
+    );
+    ignore (xhr##send Js.null);
+    Ivar.read ivar
+
+  (* Send move (update game state) *)
+  let send_move ~(room_id : string) ~(player_id : string) (new_state : Game_state.t) : document_fetch Deferred.t =
+    let url = firebase_base_url ^ "/rooms/" ^ room_id ^ ".json" in
+    let (_player_id : string) = player_id in
+    let body = game_state_to_json new_state in
+    let ivar = Ivar.create () in
+    let xhr = XmlHttpRequest.create () in
+    xhr##_open (Js.string "PUT") (Js.string url) Js._true;
+    xhr##setRequestHeader (Js.string "Content-Type") (Js.string "application/json");
+    xhr##.onreadystatechange := Js.wrap_callback (fun _ ->
+      match xhr##.readyState with
+      | XmlHttpRequest.DONE ->
+        let status = xhr##.status in
+        if status >= 200 && status < 300 then
+          Ivar.fill ivar new_state
+        else
+          Ivar.fill ivar (failwith (Printf.sprintf "Failed to send move: %d" status))
+      | _ -> ()
+    );
+    ignore (xhr##send (Js.some (Js.string body)));
+    Ivar.read ivar
+
+  let poll_room ~(room_id : string) : document_fetch Deferred.t =
+    let url = firebase_base_url ^ "/rooms/" ^ room_id ^ ".json" in
+    let ivar = Ivar.create () in
+    let xhr = XmlHttpRequest.create () in
+    xhr##_open (Js.string "GET") (Js.string url) Js._true;
+    xhr##.onreadystatechange := Js.wrap_callback (fun _ ->
+      match xhr##.readyState with
+      | XmlHttpRequest.DONE ->
+        let status = xhr##.status in
+        if status >= 200 && status < 300 then (
+          let response_text =
+            Js.Opt.get xhr##.responseText (fun () -> Js.string "{}") |> Js.to_string
+          in
+          let state = game_state_of_json response_text in
+          Ivar.fill ivar state
+        ) else
+          Ivar.fill ivar (failwith (Printf.sprintf "Failed to poll room: %d" status))
+      | _ -> ()
+    );
+    ignore (xhr##send Js.null);
+    Ivar.read ivar
+end
+
 
 module Card_selection = struct
   type t = Card.t list
@@ -79,7 +229,8 @@ let render_piles ~deck ~discard ~on_draw =
       Vdom.Attr.src img_src;
     ] in
     let attrs = if clickable then
-      attrs @ [ Vdom.Attr.on_click (fun _ -> on_draw ()) ]
+      attrs @ [ Vdom.Attr.on_click (fun _ -> 
+        Vdom.Effect.bind (on_draw ()) ~f:(fun effect -> effect)) ]
     else attrs
     in
     Vdom.Node.img ~attrs ()
@@ -142,10 +293,14 @@ let crazy_eights_board
   ~generated_room_id
   ~is_multiplayer
   ~set_is_multiplayer
-  ~player_slot
+  ~(player_slot : string)
   ~set_player_slot
+  ~multiplayer_state
+  ~set_multiplayer_state
 
   =
+
+  let _ = multiplayer_state in
 
   let on_card_click card =
     match draw_state with
@@ -167,39 +322,91 @@ let crazy_eights_board
   in
   
   let on_play_selected () =
-    match draw_state with
-    | Draw_state.Just_drawn _ -> Vdom.Effect.Ignore
-    | Draw_state.No_draw ->
-      if not (List.is_empty selected_cards) then
-        match Game_state.make_move game_state (Move.Play selected_cards) with
-        | Core.Result.Ok new_state -> 
-          Vdom.Effect.Many [
-            set_game_state new_state;
-            set_selected_cards [];
-            set_draw_state Draw_state.No_draw;
-            set_message ""
-          ]
-        | Core.Result.Error _ -> set_message "Can't play that card: it doesn't match the rank or suit!"
+    let is_my_turn =
+      match game_state.decision with
+      | Decision.Winner _ -> false
+      | Decision.In_progress { whose_turn; _ } ->
+        (Player_kind.equal whose_turn Player_kind.P1 && String.equal player_slot "P1") ||
+        (Player_kind.equal whose_turn Player_kind.P2 && String.equal player_slot "P2")
+    in
+    if is_multiplayer then
+      if not is_my_turn then
+        Vdom.Effect.return (set_message "Not your turn!")
       else
-        Vdom.Effect.Ignore
+        match Game_state.make_move game_state (Move.Play selected_cards) with
+        | Core.Result.Ok new_state ->
+          Bonsai_web.Effect.of_deferred_fun
+            (fun () -> Multiplayer.send_move ~room_id ~player_id new_state) ()
+          |> Bonsai_web.Effect.map ~f:(fun _ ->
+              Vdom.Effect.Many [
+                set_game_state new_state;
+                set_selected_cards [];
+                set_draw_state Draw_state.No_draw;
+                set_message ""
+              ])
+        | Core.Result.Error _ -> 
+          Vdom.Effect.return (set_message "Can't play that card")
+    else
+      match draw_state with
+      | Draw_state.Just_drawn _ -> Vdom.Effect.return Vdom.Effect.Ignore
+      | Draw_state.No_draw ->
+        if not (List.is_empty selected_cards) then
+          match Game_state.make_move game_state (Move.Play selected_cards) with
+          | Core.Result.Ok new_state -> 
+            Vdom.Effect.return
+              (Vdom.Effect.Many [
+                set_game_state new_state;
+                set_selected_cards [];
+                set_draw_state Draw_state.No_draw;
+                set_message ""
+              ])
+          | Core.Result.Error _ -> 
+            Vdom.Effect.return (set_message "Can't play that card: it doesn't match the rank or suit!")
+        else
+          Vdom.Effect.return Vdom.Effect.Ignore
   in
 
   let on_draw () =
-    match draw_state with
-    | Draw_state.Just_drawn _ -> Vdom.Effect.Ignore
-    | Draw_state.No_draw ->
-      if List.is_empty game_state.deck then
-        set_message "Deck is empty!"
+    let is_my_turn =
+      match game_state.decision with
+      | Decision.Winner _ -> false
+      | Decision.In_progress { whose_turn; _ } ->
+        (Player_kind.equal whose_turn Player_kind.P1 && String.equal player_slot "P1") ||
+        (Player_kind.equal whose_turn Player_kind.P2 && String.equal player_slot "P2")
+    in
+    if is_multiplayer then
+      if not is_my_turn then
+        Vdom.Effect.return (set_message "Not your turn!")
       else
         match Game_state.make_move game_state (Move.Draw_and_maybe_play None) with
-      | Core.Result.Ok new_state ->
-        Vdom.Effect.Many [
-          set_game_state new_state;
-          set_draw_state Draw_state.No_draw;
-          set_message ""
-        ]
-      | Core.Result.Error _ -> 
-        set_message "Can't draw, you have playable cards!"
+        | Core.Result.Ok new_state ->
+          Bonsai_web.Effect.of_deferred_fun
+            (fun () -> Multiplayer.send_move ~room_id ~player_id new_state) ()
+          |> Bonsai_web.Effect.map ~f:(fun _ ->
+              Vdom.Effect.Many [
+                set_game_state new_state;
+                set_draw_state Draw_state.No_draw;
+                set_message ""
+              ])
+        | Core.Result.Error _ -> 
+          Vdom.Effect.return (set_message "Can't draw, you have playable cards!")
+    else
+      match draw_state with
+      | Draw_state.Just_drawn _ -> Vdom.Effect.return Vdom.Effect.Ignore
+      | Draw_state.No_draw ->
+        if List.is_empty game_state.deck then
+          Vdom.Effect.return (set_message "Deck is empty!")
+        else
+          match Game_state.make_move game_state (Move.Draw_and_maybe_play None) with
+        | Core.Result.Ok new_state ->
+          Vdom.Effect.return
+            (Vdom.Effect.Many [
+              set_game_state new_state;
+              set_draw_state Draw_state.No_draw;
+              set_message ""
+            ])
+        | Core.Result.Error _ -> 
+          Vdom.Effect.return (set_message "Can't draw, you have playable cards!")
   in
 
   let current_player =
@@ -207,32 +414,33 @@ let crazy_eights_board
     | Decision.Winner winner -> winner
     | Decision.In_progress { whose_turn; _ } -> whose_turn
   in
-
   
-  let player_slot =
+  let display_player_slot =
     if is_multiplayer then
-      (* multiplayer: player_slot is fixed and never overwritten *)
       player_slot
     else
-      (* pass-and-play: player_slot always equals whose_turn *)
       match current_player with
       | Player_kind.P1 -> "P1"
       | Player_kind.P2 -> "P2"
   in
 
   let opponent_slot =
-    match player_slot with
+    match display_player_slot with
     | "P1" -> "P2"
     | "P2" -> "P1"
     | _ -> "Unknown"
   in
-  
 
   let opponent_hands, current_hand =
     if is_multiplayer then
+      let my_player_kind = 
+        if String.equal display_player_slot "P1" then Player_kind.P1 
+        else Player_kind.P2 
+      in
+      
       let opponent_hands =
         List.filter_map game_state.hands ~f:(fun (player, hand) ->
-            if Player_kind.equal player current_player
+            if Player_kind.equal player my_player_kind
             then None
             else
               let face_down_hand = List.map hand ~f:(fun _ -> `Face_down) in
@@ -247,17 +455,18 @@ let crazy_eights_board
                 ]
               ))
       in
+      
       let current_hand =
-        let hand = List.Assoc.find_exn game_state.hands ~equal:Player_kind.equal current_player in
+        let hand = List.Assoc.find_exn game_state.hands ~equal:Player_kind.equal my_player_kind in
         let hand_as_variant = List.map hand ~f:(fun card -> `Card card) in
         Vdom.Node.div ~attrs:[]
           [
-            Vdom.Node.div ~attrs:[] [ Vdom.Node.text ("Your Hand: " ^ player_slot ^ " ↓") ];
+            Vdom.Node.div ~attrs:[] [ Vdom.Node.text ("Your Hand: " ^ display_player_slot ^ " ↓") ];
             render_hand
               ~cards:hand_as_variant
               ~on_card_click
               ~selected_cards
-              ~player:current_player
+              ~player:my_player_kind
           ]
       in
       (opponent_hands, current_hand)
@@ -289,7 +498,7 @@ let crazy_eights_board
         Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "hand-container" ]
           [
             Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "hand-label" ]
-              [ Vdom.Node.text ("Your Hand: " ^ player_slot ^ " ↓") ];
+              [ Vdom.Node.text ("Your Hand: " ^ display_player_slot ^ " ↓") ];
             render_hand
               ~cards:hand_as_variant
               ~on_card_click
@@ -308,7 +517,8 @@ let crazy_eights_board
         Vdom.Node.button
           ~attrs:[ 
             Vdom.Attr.class_ "btn grey"
-            ; Vdom.Attr.on_click (fun _ -> on_play_selected ()) 
+            ; Vdom.Attr.on_click (fun _ -> 
+              Vdom.Effect.bind (on_play_selected ()) ~f:(fun effect -> effect))
           ]
           [ Vdom.Node.text "Play Chosen Card" ]
       else
@@ -387,11 +597,19 @@ let crazy_eights_board
                 ~attrs:[
                   Vdom.Attr.class_ "btn grey";
                   Vdom.Attr.on_click (fun _ -> 
+                    let%bind.Bonsai_web.Effect state = 
+                      Bonsai_web.Effect.of_deferred_fun
+                        (fun () -> Multiplayer.join_room ~room_id ~player_id)
+                        ()
+                    in
                     Vdom.Effect.Many [
+                      set_multiplayer_state (Some state);
+                      set_game_state state;
                       set_message ("Joined room " ^ room_id);
                       set_is_multiplayer true;
-                      set_player_slot "P2"; (* joiner becomes P2 *)
-                    ])
+                      set_player_slot "P2";
+                    ]
+                  )
                 ]
                 [ Vdom.Node.text "Join Room" ];
               
@@ -407,12 +625,20 @@ let crazy_eights_board
                 ~attrs:[
                   Vdom.Attr.class_ "btn grey";
                   Vdom.Attr.on_click (fun _ ->
+                    let%bind.Bonsai_web.Effect state = 
+                      Bonsai_web.Effect.of_deferred_fun
+                        (fun () -> Multiplayer.create_room ~room_id:generated_room_id ~player_id)
+                        ()
+                    in
                     Vdom.Effect.Many [
+                      set_multiplayer_state (Some state);
+                      set_game_state state;
                       set_room_id generated_room_id;
                       set_message ("Created and joined room " ^ generated_room_id);
                       set_is_multiplayer true;
-                      set_player_slot "P1"; (* creator becomes P1 *)
-                    ])
+                      set_player_slot "P1";
+                    ]
+                  )
                 ]
                 [ Vdom.Node.text "Create Room" ];  
               
@@ -461,6 +687,33 @@ let app =
   let%sub player_slot, set_player_slot =
     Bonsai.state (module String) ~default_model:"none"
   in
+  let%sub multiplayer_state, set_multiplayer_state =
+    Bonsai.state (module (struct
+      type t = Game_state.t option [@@deriving sexp, equal]
+    end)) ~default_model:None
+  in
+
+  let%sub () =
+    let effect =
+      let%map is_multiplayer = is_multiplayer
+      and room_id = room_id
+      and set_game_state = set_game_state in
+      if is_multiplayer && not (String.is_empty room_id) then
+        let%bind.Bonsai_web.Effect new_state =
+          Bonsai_web.Effect.of_deferred_fun
+            (fun () -> Multiplayer.poll_room ~room_id)
+            ()
+        in
+        set_game_state new_state
+      else
+        Vdom.Effect.Ignore
+    in
+    Bonsai.Clock.every
+      ~when_to_start_next_effect:`Wait_period_after_previous_effect_starts_blocking
+      ~trigger_on_activate:false
+      (Time_ns.Span.of_sec 2.0)
+      effect
+  in
 
   let%arr game_state = game_state
   and set_game_state = set_game_state
@@ -478,6 +731,9 @@ let app =
   and set_is_multiplayer = set_is_multiplayer
   and player_slot = player_slot
   and set_player_slot = set_player_slot
+  and multiplayer_state = multiplayer_state
+  and set_multiplayer_state = set_multiplayer_state
+
   in
   crazy_eights_board 
     ~game_state ~set_game_state 
@@ -489,6 +745,7 @@ let app =
     ~generated_room_id
     ~is_multiplayer ~set_is_multiplayer
     ~player_slot ~set_player_slot
+    ~multiplayer_state ~set_multiplayer_state
 ;;
 
 let () = Bonsai_web.Start.start app

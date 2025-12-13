@@ -4,7 +4,7 @@ module Player_kind : sig
   type t =
     | P1
     | P2
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 
   val opposite : t -> t
 end
@@ -15,7 +15,7 @@ module Suit : sig
     | Diamonds
     | Clubs
     | Spades
-  [@@deriving sexp, compare, equal, enumerate]
+  [@@deriving sexp, compare, equal, enumerate, yojson]
 end
 
 module Rank : sig
@@ -33,7 +33,7 @@ module Rank : sig
     | Queen
     | King
     | Ace
-  [@@deriving sexp, compare, equal, enumerate]
+  [@@deriving sexp, compare, equal, enumerate, yojson]
 end
 
 module Card : sig
@@ -41,7 +41,7 @@ module Card : sig
     { rank : Rank.t
     ; suit : Suit.t
     }
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 end
 
 module Decision : sig
@@ -51,7 +51,7 @@ module Decision : sig
         ; declared_suit : Suit.t option
         }
     | Winner of Player_kind.t
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 
   val is_game_over : t -> bool
 end
@@ -61,7 +61,7 @@ module Move : sig
     | Play of Card.t list
     | Draw_and_maybe_play of Card.t option
     (** draw one card from the deck, if playable, must play *)
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 end
 
 module Game_state : sig
@@ -71,7 +71,7 @@ module Game_state : sig
     ; deck : Card.t list
     ; decision : Decision.t
     }
-  [@@deriving sexp, compare, equal]
+  [@@deriving sexp, compare, equal, yojson]
 
   module Create_error : sig
     type t = Invalid_initial_setup [@@deriving sexp, compare]
