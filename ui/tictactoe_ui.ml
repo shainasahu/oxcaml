@@ -4,7 +4,6 @@ open Hw2_tictactoe_logic
 open Virtual_dom
 open! Bonsai.Let_syntax
 
-
 let () = Random.self_init ()
 
 module Card_selection = struct
@@ -141,6 +140,11 @@ let crazy_eights_board
   ~room_id
   ~set_room_id
   ~generated_room_id
+  ~is_multiplayer
+  ~set_is_multiplayer
+  ~player_slot
+  ~set_player_slot
+
   =
 
   let on_card_click card =
@@ -204,20 +208,97 @@ let crazy_eights_board
     | Decision.In_progress { whose_turn; _ } -> whose_turn
   in
 
-  let opponent_hands =
-    List.filter_map game_state.hands ~f:(fun (player, hand) ->
-        if Player_kind.equal player current_player
-        then None
-        else
-          let face_down_hand = List.map hand ~f:(fun _ -> `Face_down) in
-          Some (render_hand ~cards:face_down_hand ~on_card_click:(fun _ -> Vdom.Effect.Ignore) ~selected_cards:[] ~player))
+  
+  let player_slot =
+    if is_multiplayer then
+      (* multiplayer: player_slot is fixed and never overwritten *)
+      player_slot
+    else
+      (* pass-and-play: player_slot always equals whose_turn *)
+      match current_player with
+      | Player_kind.P1 -> "P1"
+      | Player_kind.P2 -> "P2"
   in
 
-  let current_hand =
-    let hand = List.Assoc.find_exn game_state.hands ~equal:Player_kind.equal current_player in
-    let hand_as_variant = List.map hand ~f:(fun card -> `Card card) in
-    render_hand ~cards:hand_as_variant ~on_card_click ~selected_cards ~player:current_player
+  let opponent_slot =
+    match player_slot with
+    | "P1" -> "P2"
+    | "P2" -> "P1"
+    | _ -> "Unknown"
   in
+  
+
+  let opponent_hands, current_hand =
+    if is_multiplayer then
+      let opponent_hands =
+        List.filter_map game_state.hands ~f:(fun (player, hand) ->
+            if Player_kind.equal player current_player
+            then None
+            else
+              let face_down_hand = List.map hand ~f:(fun _ -> `Face_down) in
+              Some (
+                Vdom.Node.div ~attrs:[] [
+                  Vdom.Node.div ~attrs:[] [ Vdom.Node.text ("Opponent Hand: " ^ opponent_slot ^ " ↓") ];
+                  render_hand
+                    ~cards:face_down_hand
+                    ~on_card_click:(fun _ -> Vdom.Effect.Ignore)
+                    ~selected_cards:[]
+                    ~player
+                ]
+              ))
+      in
+      let current_hand =
+        let hand = List.Assoc.find_exn game_state.hands ~equal:Player_kind.equal current_player in
+        let hand_as_variant = List.map hand ~f:(fun card -> `Card card) in
+        Vdom.Node.div ~attrs:[]
+          [
+            Vdom.Node.div ~attrs:[] [ Vdom.Node.text ("Your Hand: " ^ player_slot ^ " ↓") ];
+            render_hand
+              ~cards:hand_as_variant
+              ~on_card_click
+              ~selected_cards
+              ~player:current_player
+          ]
+      in
+      (opponent_hands, current_hand)
+
+    else
+      (* Pass and Play *)
+      let opponent_hands =
+        List.filter_map game_state.hands ~f:(fun (player, hand) ->
+            if Player_kind.equal player current_player
+            then None
+            else
+              let face_down_hand = List.map hand ~f:(fun _ -> `Face_down) in
+              Some (
+                Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "hand-container" ] [
+                  Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "hand-label" ]
+                    [ Vdom.Node.text ("Opponent Hand: " ^ opponent_slot ^ " ↓") ];
+                  render_hand
+                    ~cards:face_down_hand
+                    ~on_card_click:(fun _ -> Vdom.Effect.Ignore)
+                    ~selected_cards:[]
+                    ~player
+                ]
+              ))
+      in
+
+      let current_hand =
+        let hand = List.Assoc.find_exn game_state.hands ~equal:Player_kind.equal current_player in
+        let hand_as_variant = List.map hand ~f:(fun card -> `Card card) in
+        Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "hand-container" ]
+          [
+            Vdom.Node.div ~attrs:[ Vdom.Attr.class_ "hand-label" ]
+              [ Vdom.Node.text ("Your Hand: " ^ player_slot ^ " ↓") ];
+            render_hand
+              ~cards:hand_as_variant
+              ~on_card_click
+              ~selected_cards
+              ~player:current_player
+          ]
+      in
+      (opponent_hands, current_hand)
+  in  
 
   let play_button =
     match draw_state with
@@ -244,7 +325,7 @@ let crazy_eights_board
         Vdom.Node.create "p" ~attrs:[]
           [ Vdom.Node.text "• Match rank OR suit of top card" ];
         Vdom.Node.create "p" ~attrs:[]
-          [ Vdom.Node.text "• Eights are wild (playable on any suit)" ];
+          [ Vdom.Node.text "• Eights are wild (playable on any suit, suit changes to the 8's suit)" ];
         Vdom.Node.create "p" ~attrs:[]
           [ Vdom.Node.text "• Draw if you can't play" ];
         Vdom.Node.create "p" ~attrs:[]
@@ -305,7 +386,12 @@ let crazy_eights_board
               Vdom.Node.button
                 ~attrs:[
                   Vdom.Attr.class_ "btn grey";
-                  Vdom.Attr.on_click (fun _ -> set_message ("Joined room " ^ room_id))
+                  Vdom.Attr.on_click (fun _ -> 
+                    Vdom.Effect.Many [
+                      set_message ("Joined room " ^ room_id);
+                      set_is_multiplayer true;
+                      set_player_slot "P2"; (* joiner becomes P2 *)
+                    ])
                 ]
                 [ Vdom.Node.text "Join Room" ];
               
@@ -323,7 +409,9 @@ let crazy_eights_board
                   Vdom.Attr.on_click (fun _ ->
                     Vdom.Effect.Many [
                       set_room_id generated_room_id;
-                      set_message ("Created and joined room " ^ generated_room_id)
+                      set_message ("Created and joined room " ^ generated_room_id);
+                      set_is_multiplayer true;
+                      set_player_slot "P1"; (* creator becomes P1 *)
                     ])
                 ]
                 [ Vdom.Node.text "Create Room" ];  
@@ -367,6 +455,12 @@ let app =
   let%sub generated_room_id = 
     Bonsai.const (Random.int 9000 + 1000 |> string_of_int)
   in
+  let%sub is_multiplayer, set_is_multiplayer =
+    Bonsai.state (module Bool) ~default_model:false
+  in
+  let%sub player_slot, set_player_slot =
+    Bonsai.state (module String) ~default_model:"none"
+  in
 
   let%arr game_state = game_state
   and set_game_state = set_game_state
@@ -380,6 +474,10 @@ let app =
   and room_id = room_id
   and set_room_id = set_room_id
   and generated_room_id = generated_room_id
+  and is_multiplayer = is_multiplayer
+  and set_is_multiplayer = set_is_multiplayer
+  and player_slot = player_slot
+  and set_player_slot = set_player_slot
   in
   crazy_eights_board 
     ~game_state ~set_game_state 
@@ -389,6 +487,8 @@ let app =
     ~player_id
     ~room_id ~set_room_id
     ~generated_room_id
+    ~is_multiplayer ~set_is_multiplayer
+    ~player_slot ~set_player_slot
 ;;
 
 let () = Bonsai_web.Start.start app
